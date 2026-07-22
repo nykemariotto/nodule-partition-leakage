@@ -1,0 +1,58 @@
+# =====================================================================
+# .gitignore — versions CODE + partition indices (B7) + cohort tables + docs.
+# Excludes raw data, large regenerable arrays, model weights, and mid-grid
+# volatile outputs. See data/README.md to obtain the raw datasets.
+# =====================================================================
+
+# --- raw data (never committed; huge, external) ---
+LIDC-IDRI/
+LNDb/
+LNDB/
+data/
+*.rar
+*.mhd
+*.raw
+*.dcm
+
+# --- large / regenerable arrays and weights (CRITICAL: exclude the .npy tree,
+#     ~5.7 GB, and all model checkpoints) ---
+outputs/processed/
+*.npy
+outputs/models/
+outputs/**/*.pt
+outputs/**/*.pth
+outputs/metadata/*.pkl
+outputs/metadata/processed_index_*.csv
+
+# --- backups / archives / logs (not part of the released repo) ---
+outputs/_archive_250/
+outputs/_pre_remediation/
+outputs/logs/
+
+# --- mid-grid VOLATILE outputs (partial while the grid runs; commit the
+#     COMPLETE 740-grid probs/history/metrics/results/figures POST-GRID) ---
+outputs/probs/
+outputs/history/
+outputs/metrics/
+outputs/results/
+outputs/figures/
+
+# --- committed ON PURPOSE (do NOT ignore): the executable partition indices
+#     R3 asked for (B7), the cohort/accounting tables, code, config, docs ---
+#   outputs/splits/            (partition indices — B7)
+#   outputs/metadata/lidc_master.csv, lidc_nodules.csv, dataset_accounting.*
+
+# --- generated report artifacts (regenerable from source) ---
+*.pdf
+Relatorio_*.html
+
+# --- python / os / editors ---
+__pycache__/
+*.py[cod]
+.ipynb_checkpoints/
+.venv/
+*.egg-info/
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

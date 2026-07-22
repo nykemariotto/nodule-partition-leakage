@@ -1,0 +1,186 @@
+# =====================================================================
+# config.yaml — single declarative source of hyperparameters (SPEC §4)
+# Every number the pipeline uses lives here. No magic numbers in code.
+# Windows host: paths use forward slashes; pathlib normalizes them.
+#
+# 2026-07-17 premise update: deadline is no longer a constraint. Prioritize
+# maximum robustness and reviewer-resistance over speed (one resubmission).
+# =====================================================================
+
+project:
+  name: lidc-partitioning-study
+  root: "E:/NODULES"
+
+paths:
+  # LIDC DICOM root = the folder that directly contains LIDC-IDRI-XXXX patient dirs.
+  # This MUST match the [dicom] path in pylidc.conf (pylidc's source of truth).
+  lidc_dicom_root: "E:/NODULES/LIDC-IDRI/manifest-1600709154662/LIDC-IDRI"
+  lidc_metadata_csv: "E:/NODULES/LIDC-IDRI/manifest-1600709154662/metadata.csv"
+  lndb_root: "E:/NODULES/LNDb"          # populated after the Zenodo v4 download
+  outputs: "outputs"
+
+# ---------------------------------------------------------------------
+# Metadata / sample construction (STAGE 1 — src/metadata.py)
+# The master table is a SUPERSET (all labelled nodules, min_annotators>=1);
+# downstream stages filter to the principal cohort via `cohort_main`.
+# ---------------------------------------------------------------------
+metadata:
+  engine: pylidc                        # annotation->nodule clustering + labels
+  emit_superset: true                   # master = every labelled nodule; do not drop rows at build time
+  min_annotators_principal: 1           # PRINCIPAL cohort (D16, 2026-07-17 reversal): literature-comparable + statistically viable
+  min_annotators_sensitivity: [1, 3]    # >=3 = high-agreement label-noise robustness check (R4.4)
+  over_merge_flag_threshold: 4          # FLAG (never split) nodules with >4 annotators (Decision 3)
+  clustering:
+    # pylidc Scan.cluster_annotations() defaults (documented for reproducibility):
+    metric: min
+    tol: null                           # None => pylidc adaptive tolerance
+    factor: 0.9
+    min_tol: 0.1
+  io_workers: 24                        # threads for DICOM header reads (I/O-bound)
+
+# ---------------------------------------------------------------------
+# Label definition (binary malignancy — S2)
+# ---------------------------------------------------------------------
+label:
+  malignant: [4, 5]
+  benign: [1, 2]
+  exclude_ambiguous: [3]
+  consensus: median                     # MEDIAN of radiologist scores (NOT mean) — D1; verified refs in DECISIONS.md
+                                        # median in {4,5} -> malignant; {1,2} -> benign; == 3 -> excluded
+  encoding: {malignant: 1, benign: 0}
+
+# ---------------------------------------------------------------------
+# Experiment matrix (SPEC §2.1-2.3) — the FULL 2x2 runs on EVERY setting
+# ---------------------------------------------------------------------
+experiment:
+  # sample_units are PER-SETTING: full 2x2 only on the flagship S2; S1/S3 use the
+  # principal axis (slice) — S2 carries the "not a slice-level artifact" argument;
+  # S1/S3 carry dataset-generalization / end-to-end (SPEC §2.3, DECISIONS.md).
+  settings:
+    S1: {dataset: lndb_multiclass, task: multiclass, sample_units: [slice]}          # GGO/part-solid/solid
+    S2: {dataset: lidc_binary,     task: binary,     sample_units: [slice, nodule]}  # flagship — full 2x2
+    S3: {dataset: lidc_end2end,    task: binary,     sample_units: [slice]}          # seg->ROI->classify; independent test
+  split_units:  [patient, random]       # patient = GroupKFold(patient_id) [Arm A]; random = KFold ignoring patient [Arm B]
+  # Gap(setting, arch, sample_unit) = mean_over_folds[ metric(random) - metric(patient) ]
+  # S2 Arm B TWO leakage levels reported SEPARATELY (never collapsed) -> mechanism (B10):
+  #   (sample=slice,  random) = slice-redundancy leakage
+  #   (sample=nodule, random) = patient-context-via-nodule leakage
+  report_leakage_levels_separately: true
+
+# ---------------------------------------------------------------------
+# Preprocessing (STAGE 2 — src/preprocess.py) — deterministic
+# ---------------------------------------------------------------------
+preprocess:
+  input_size: [256, 256, 3]             # H, W, C (prep guide PubMed 37484314)
+  hu_clip: [-1000, 400]                 # clip HU to [-1000,400] (air<->bone), then rescale [0,1]
+                                        # majority DL-nodule practice: ProCAN (arXiv 2010.15417), Al-Shabi (D18)
+  rescale: [0.0, 1.0]
+  consensus_rule: 0.5                   # pylidc consensus clevel: >=2 of 4 annotators -> consensus ROI mask
+  roi_pad_mm: 8                         # padding around the consensus bbox before the square crop
+  channels: replicate                   # single HU-windowed channel replicated to 3 (ImageNet-compatible)
+  enhancement: [none, clahe]            # ABLATION FACTOR (SPEC §2.6b / R1.4): controlled with/without image enhancement
+  enhancement_principal: none           # the enhancement used in the main grid; 'clahe' is the ablation arm
+
+# ---------------------------------------------------------------------
+# Splitting (STAGE 3 — src/splits.py)
+# ---------------------------------------------------------------------
+split:
+  ratios: {train: 0.8, val: 0.1, test: 0.1}
+  group_key: patient_id                 # patient-level grouping key (Arm A)
+  # stratify_key REMOVED 2026-07-20 (DECISIONS D28). It declared label stratification that
+  # src/splits.py never performed. Measured before removing: sklearn StratifiedGroupKFold makes
+  # fold prevalence WORSE here (SD 0.0609 -> 0.0634; 73% of patients are label-pure, ICC 0.357),
+  # and even a near-perfect balancer (prevalence SD 0.0038, 15x better) moves the fold-to-fold
+  # metric SD by only 1-7%. Folds are grouped-only, by evidence, not by omission.
+
+# Repetition = Repeated Grouped-vs-Random K-Fold. Seeds parameterize the repeats, so
+# "seeds AND GroupKFold" is unified (no redundant seed x fold cross-product). SPEC §2.2.
+# n = repeats x folds paired points for the A-vs-B Wilcoxon. n>=10 is MANDATORY: at n=5
+# the Wilcoxon signed-rank cannot reach p<0.05 (min two-sided p = 2/2^5 = 0.0625).
+repetition:
+  scheme: repeated_group_kfold
+  variance_correction: nadeau_bengio    # corrects for correlated folds within a repeat (cite in paper)
+  per_setting:                          # repeats x folds  ->  n paired points
+    S2: {repeats: 3, folds: 5}          # n = 15  (flagship, max rigor)
+    S1: {repeats: 2, folds: 5}          # n = 10
+    S3: {repeats: 2, folds: 5}          # n = 10
+  seed_list: [42, 123, 2024, 7, 99]     # repeat r uses seed_list[r] for both arms
+  group_key: patient_id
+seed_list: [42, 123, 2024, 7, 99]       # kept for backward-compat references
+
+# ---------------------------------------------------------------------
+# Training (STAGE 4 — src/train.py)  — 8 GB survival kit
+# ---------------------------------------------------------------------
+train:
+  optimizer: adam
+  lr: 1.0e-4
+  batch_size: 8                         # physical; effective 32 via accumulation
+  grad_accum_steps: 4
+  max_epochs: 30
+  early_stopping_patience: 10
+  # CANONICAL checkpoint = best val_loss (what early stopping selects) -> THE paper number (D22).
+  # 'final' (max memorization) is ALSO saved every run, but is a MECHANISTIC PROBE only, never the headline.
+  checkpoint_selection: best_loss
+  # Early stopping selects on the VALIDATION set, whose leakage status MIRRORS the test set per arm
+  # (measured): patient arm val 0.0% patient-overlap with train; random arm val ~99% overlap.
+  # Consequence: in the random arm the leaked val keeps improving -> stopping is delayed -> a more
+  # memorized checkpoint is chosen. This is faithful to the audited practice but INFLATES the gap
+  # via a second route (leaky val misleads early stopping) on top of the leaky test. Documented, not "fixed".
+  reduce_lr: {factor: 0.1, patience: 5, monitor: val_loss}
+  amp: true
+  # PERFORMANCE-ONLY settings (D22 amendment 2026-07-19). Measured on this machine:
+  #   channels_last=True  -> DenseNet121 138.1 ms/batch   (concat has no channels_last kernel,
+  #   channels_last=False -> DenseNet121  65.6 ms/batch    so the layout is converted constantly)
+  #   worker spawn        -> 16.8 s per iterator creation x2 loaders x30 epochs ~= 17 min/run
+  # These change memory layout and worker persistence only: augmentation PARAMETERS, epochs,
+  # early stopping, checkpoint rule, metrics, architecture and data are untouched. They do shift
+  # which sequence the augmentation RNG emits (stochastic realization, not methodology) -> fixed
+  # BEFORE any canonical measurement, and ALL runs use these settings.
+  channels_last: false
+  num_workers: 6
+  persistent_workers: true
+  # freeze_then_finetune REMOVED 2026-07-20 (DECISIONS D27). It declared a head-first/unfreeze
+  # schedule that no code implements: every run in outputs/ is a FULL fine-tune from the
+  # pretrained weights. The config now describes what actually happens.
+
+augment:                                # TRAIN ONLY
+  rotation_deg: 30
+  translate_frac: 0.30
+  shear: 0.3
+  zoom: 0.3
+  hflip: true
+
+# ---------------------------------------------------------------------
+# Architectures (SPEC §2.4) — expanded set, all fit 4060 Ti 8 GB via AMP + accum
+# ---------------------------------------------------------------------
+architectures:
+  primary: [resnet50, densenet121, efficientnet_b0, convnext_tiny, inception_v3]
+  sota:    [swin_tiny, maxvit_tiny_tf_224]      # transformer / hybrid baselines (R1.5/R2)
+  # escalate efficientnet_b0 -> b3 only if VRAM allows; drop batch & raise accumulation on OOM
+
+ensemble:
+  members: [resnet50, densenet121, efficientnet_b0]
+  method: soft_voting                   # PRIMARY — leakage-proof by construction (no meta-learner); D20
+  threshold: 0.5                        # declared; if tuned on val, log it explicitly
+  sensitivity: [uniform, weighted_val_auc]   # robustness: weights from VAL AUC only (nested CV), never test
+
+# ---------------------------------------------------------------------
+# Evaluation (STAGE 6-7) — aggregate at slice, nodule AND patient level
+# to neutralize the slice-level artificial class balance (SPEC §2.6 / I6)
+# ---------------------------------------------------------------------
+evaluate:
+  aggregation: [slice, nodule, patient] # mean of slice probs -> one label per nodule / per patient
+  bootstrap_n: 2000
+  ci: 0.95
+  primary_metric: auc
+
+stats:
+  paired_ab: wilcoxon                   # A(patient) vs B(random) across seeds; paired-t as sensitivity
+  within_arm: mcnemar                   # same test set only (architecture / ensemble comparisons)
+
+# ---------------------------------------------------------------------
+# Mechanism analysis (STAGE 8 — SPEC §2.6a) — the "why", not only the "how much"
+# ---------------------------------------------------------------------
+mechanism:
+  attribution: [gradcam, shap]          # show random-split model attends peri-nodular patient context
+  quantify_leakage: true                # count patients whose slices/nodules bleed train<->test in the random arm

@@ -1,0 +1,54 @@
+[1/4] mapping SeriesInstanceUID -> on-disk folder ...
+      1308 series folders resolved on disk.
+[2/4] reading pylidc annotations + clustering nodules ...
+      1018 scans processed.
+[3/4] assembling nodule + sample tables (superset; resolving slice paths) ...
+      2651 nodules, 11026 slice-samples written.
+[4/4] writing dataset accounting ...
+
+=== SUMMARY ===
+{
+  "scans": 1018,
+  "annotations_ge3mm": 6859,
+  "physical_nodules": 2651,
+  "labelled_binary": 1695,
+  "ambiguous_excluded": 956,
+  "over_merge_flagged": 14,
+  "principal_cohort": {
+    "min_annotators": 3,
+    "samples": {
+      "slice": {
+        "n": 6973,
+        "malignant": 4450,
+        "benign": 2523
+      },
+      "nodule": {
+        "n": 879,
+        "malignant": 430,
+        "benign": 449
+      }
+    },
+    "slices_per_patient": {
+      "min": 1,
+      "median": 10,
+      "max": 81
+    }
+  },
+  "superset_cohort": {
+    "min_annotators": 1,
+    "samples": {
+      "slice": {
+        "n": 11026,
+        "malignant": 5504,
+        "benign": 5522
+      },
+      "nodule": {
+        "n": 1695,
+        "malignant": 545,
+        "benign": 1150
+      }
+    }
+  }
+}
+
+Outputs in: E:/NODULES\outputs\metadata

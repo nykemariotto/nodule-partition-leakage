@@ -1,0 +1,73 @@
+{
+  "generated_utc": "2026-07-17T16:40:21Z",
+  "principal_min_annotators": 1,
+  "note": "D16 reversal: principal = min_annotators>=1 (literature-comparable + viable); >=3 = sensitivity",
+  "funnel": {
+    "scans": 1018,
+    "patients": 1010,
+    "annotations_ge3mm": 6859,
+    "physical_nodules": 2651,
+    "labelled_binary": 1695,
+    "ambiguous_excluded": 956
+  },
+  "over_merge_flag": {
+    "threshold": 4,
+    "n_flagged": 14,
+    "label_breakdown": {
+      "malignant": 9,
+      "ambiguous": 4,
+      "benign": 1
+    },
+    "note": "flagged not split -> label-neutral"
+  },
+  "principal_cohort_min1": {
+    "slice": {
+      "n": 11026,
+      "mal": 5504,
+      "ben": 5522
+    },
+    "nodule": {
+      "n": 1695,
+      "mal": 545,
+      "ben": 1150
+    },
+    "patients": 740,
+    "slices_per_patient": {
+      "min": 1,
+      "median": 11,
+      "max": 97
+    }
+  },
+  "sensitivity_cohort_min3": {
+    "slice": {
+      "n": 6973,
+      "mal": 4450,
+      "ben": 2523
+    },
+    "nodule": {
+      "n": 879,
+      "mal": 430,
+      "ben": 449
+    },
+    "patients": 535,
+    "slices_per_patient": {
+      "min": 1,
+      "median": 10,
+      "max": 81
+    }
+  },
+  "sensitivity_nodules": {
+    "1": {
+      "nodules": 1695,
+      "mal": 545,
+      "ben": 1150,
+      "patients": 740
+    },
+    "3": {
+      "nodules": 879,
+      "mal": 430,
+      "ben": 449,
+      "patients": 535
+    }
+  }
+}
