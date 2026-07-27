@@ -1,0 +1,34 @@
+{
+  "densenet121": {
+    "n_patients": 740,
+    "n_nodules": 1695,
+    "draws": 200,
+    "rate_sd_current": 0.02876323442068524,
+    "rate_sd_balanced": 0.0001497805274948157,
+    "metric_sd_current_auc": 0.020823487278717946,
+    "metric_sd_balanced_auc": 0.020056858301237854,
+    "metric_sd_pct_change_auc": -3.681559035808585,
+    "metric_sd_current_ll": 0.03845157864568391,
+    "metric_sd_balanced_ll": 0.03590615456618922,
+    "metric_sd_pct_change_ll": -6.619816842761547,
+    "metric_sd_current_br": 0.013059865257717542,
+    "metric_sd_balanced_br": 0.012141286338146675,
+    "metric_sd_pct_change_br": -7.033601813219673
+  },
+  "efficientnet_b0": {
+    "n_patients": 740,
+    "n_nodules": 1695,
+    "draws": 200,
+    "rate_sd_current": 0.02876323442068524,
+    "rate_sd_balanced": 0.0001497805274948157,
+    "metric_sd_current_auc": 0.018645665050584216,
+    "metric_sd_balanced_auc": 0.01848997133605494,
+    "metric_sd_pct_change_auc": -0.8350129325335927,
+    "metric_sd_current_ll": 0.044886732875357306,
+    "metric_sd_balanced_ll": 0.04216875634524173,
+    "metric_sd_pct_change_ll": -6.055189041409906,
+    "metric_sd_current_br": 0.013263408574026978,
+    "metric_sd_balanced_br": 0.012290120526704055,
+    "metric_sd_pct_change_br": -7.338144202455321
+  }
+}

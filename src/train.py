@@ -82,7 +82,7 @@ def main():
     ap.add_argument("--config", default="config.yaml")
     ap.add_argument("--dataset", default="lidc_binary")
     ap.add_argument("--arch", default="efficientnet_b0")
-    ap.add_argument("--arm", default="patient", choices=["patient", "random"])
+    ap.add_argument("--arm", default="patient", choices=["patient", "random", "nodule"])
     ap.add_argument("--sample-unit", default="slice", choices=["slice", "nodule"])
     ap.add_argument("--rep", type=int, default=0)
     ap.add_argument("--fold", type=int, default=0)
@@ -132,14 +132,25 @@ def main():
     scaler = GradScaler()
     accum = tr_cfg["grad_accum_steps"]
     max_epochs = args.max_epochs or tr_cfg["max_epochs"]
-    patience = args.patience or tr_cfg["early_stopping_patience"]
+    # TRAINING budget guard. Defaults to the full budget (no truncation) because the `final`
+    # memorisation probe (D22 ii) requires every run to reach max_epochs; truncating would leave
+    # some runs without a probe and make the mechanism analysis asymmetric. The pre-registered
+    # config.train.early_stopping_patience governs SELECTION (sel_patience below), not truncation.
+    patience = args.patience or max_epochs
 
     def snapshot():
         return {k: v.detach().cpu().clone() for k, v in model.state_dict().items()}
 
     history = []
     best_val, best_loss_state, bad = float("inf"), None, 0
-    best_auc, best_auc_state = -1.0, None
+    # CANONICAL SELECTION WINDOW (D46/D47). The pre-registered protocol is
+    # config.train.early_stopping_patience (=10). The canonical checkpoint is the one THAT protocol
+    # would select: argmin(val_loss) among epochs up to the point where patience-10 would have
+    # stopped training. Training itself is NOT truncated -- it runs the full budget so the `final`
+    # memorisation probe (D22 ii) exists for EVERY run and the mechanism analysis stays symmetric.
+    # Selection is restricted; training is not.
+    sel_patience = int(tr_cfg["early_stopping_patience"])
+    sel_val, canon_state, canon_epoch, sel_bad, sel_frozen = float("inf"), None, None, 0, False
     for ep in range(1, max_epochs + 1):
         model.train(); opt.zero_grad(); tl = []
         for i, (x, y) in enumerate(dl_tr):
@@ -156,21 +167,36 @@ def main():
         history.append({"epoch": ep, "train_loss": float(np.mean(tl)), "val_loss": vl,
                         "val_auc": vauc, "lr": opt.param_groups[0]["lr"]})
         print(f"  epoch {ep}: train_loss {np.mean(tl):.4f} · val_loss {vl:.4f} · val_auc {vauc:.4f}")
-        if not np.isnan(vauc) and vauc > best_auc:
-            best_auc, best_auc_state = vauc, snapshot()
-        if vl < best_val - 1e-4:
-            best_val, best_loss_state, bad = vl, snapshot(), 0
+        improved_sel = (not sel_frozen) and vl < sel_val - 1e-4
+        improved_best = vl < best_val - 1e-4
+        snap = snapshot() if (improved_sel or improved_best) else None
+        if not sel_frozen:
+            if improved_sel:
+                sel_val, canon_state, canon_epoch, sel_bad = vl, snap, ep, 0
+            else:
+                sel_bad += 1
+                if sel_bad >= sel_patience:
+                    sel_frozen = True
+                    print(f"  [selection] patience-{sel_patience} window closed at epoch {ep}; "
+                          f"canonical checkpoint fixed at epoch {canon_epoch}")
+        if improved_best:
+            best_val, best_loss_state, bad = vl, snap, 0
         else:
             bad += 1
             if bad >= patience:
                 print(f"  early stop at epoch {ep}"); break
     final_state = snapshot()
+    if canon_state is None:                      # degenerate: val never improved inside the window
+        canon_state, canon_epoch = best_loss_state, int(np.argmin([h["val_loss"] for h in history]) + 1)
 
     # --- DUAL CHECKPOINT (SPEC/DECISIONS): one training pass, two readings ---
-    #   canonical = best_val_loss  (what early stopping selects; THE paper number)
+    #   canonical = best val_loss WITHIN the patience-`selection_patience` window (D47) — what the
+    #               pre-registered protocol would select; THE paper number. NOTE: this is not the
+    #               unrestricted argmin; `unrestricted_best_epoch` is stamped alongside for audit.
     #   probe     = final          (max memorization; mechanistic only, never the headline)
     vls = [h["val_loss"] for h in history]
-    best_epoch = int(np.argmin(vls) + 1)
+    unrestricted_best_epoch = int(np.argmin(vls) + 1)
+    best_epoch = int(canon_epoch)     # the SELECTED canonical checkpoint (patience-window, D47)
     es_epoch, bv, bad_run = None, float("inf"), 0          # when patience WOULD have fired
     for h in history:
         if h["val_loss"] < bv - 1e-4:
@@ -185,7 +211,7 @@ def main():
     for sub in ("probs", "history", "models", "metrics"):
         os.makedirs(os.path.join(O, sub), exist_ok=True)
 
-    for sel_name, state in (("best_loss", best_loss_state), ("final", final_state)):
+    for sel_name, state in (("best_loss", canon_state), ("final", final_state)):
         if state is None:
             continue
         model.load_state_dict(state)
@@ -198,7 +224,10 @@ def main():
         atomic_json(os.path.join(O, "history", f"{run}.json"), {"tag": tag, "arch": args.arch, "checkpoint": sel_name, "kind": kind,
                        "config_sha256": cfg_hash,
                        "max_epochs": max_epochs, "patience": patience,
-                       "best_epoch": best_epoch, "early_stop_would_fire_at": es_epoch,
+                       "training_patience": patience, "selection_patience": sel_patience,
+                       "best_epoch": best_epoch,
+                       "unrestricted_best_epoch": unrestricted_best_epoch,
+                       "early_stop_would_fire_at": es_epoch,
                        "epochs_run": len(history), "history": history,
                        "test": {"auc": te_auc, "acc": acc, "loss": te_loss},
                        "peak_vram_gb": peak_vram})

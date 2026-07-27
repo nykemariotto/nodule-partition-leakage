@@ -1,0 +1,919 @@
+[
+ {
+  "components": [
+   {
+    "name": "S3 setting as a whole (lidc_end2end: lung seg -> nodule seg -> ROI -> classify, independent patient-level test)",
+    "state": "absent",
+    "evidence": "Declared only as prose: SPEC.md:163 (S3 row), SPEC.md:180-184 (\"S3 fix\", test touched once), SPEC.md:390 (B6), SPEC.md:398 (I5); config.yaml:62. Repo-wide grep for s3|end2end|end-to-end|segment|candidate|detect over src/ scripts/ config.yaml returns ONLY config_contract.py declarations and config.yaml comments - zero implementation lines. Demonstrated: `python -m src.train --dataset lidc_end2end --arm patient --sample-unit slice --rep 0 --fold 0` -> FileNotFoundError: outputs/splits/lidc_end2end_slice_patient_rep0_fold0_train.csv",
+    "blocking_for": "R1.7 / R3 / R4.2 (SPEC B6), I5 (segmentation detail + seg accuracy + error propagation), H2 (SPEC.md:93-97, inflation grows with pipeline complexity), B11 (gap persists across settings)",
+    "work_needed": "Everything below. S3 is a greenfield sub-project, not a variant of the existing runner."
+   },
+   {
+    "name": "Lung segmentation code",
+    "state": "absent",
+    "evidence": "grep -rniE \"unet|monai|segmentation_models|smp\\.|lung\" over src/ scripts/ config.yaml -> no hits (only the word 'documentation' matching /monai?/ style false positives were excluded manually; no seg module exists). src/ contains exactly: __init__, config_contract, datasets, ensemble, evaluate, figures, metadata, models, preprocess, splits, stats, train.",
+    "blocking_for": "I5 (R3/R4 asked for segmentation models, training data, seg accuracy, error propagation); first stage of the S3 cascade",
+    "work_needed": "Choose approach (classical thresholding+morphology via skimage, or a U-Net); no lung masks exist in LIDC, so either a rule-based segmenter (defensible, cheap) or an external mask source (e.g. LUNA16 seg-lungs-LUNA16) must be obtained. Then write module, validate, report Dice."
+   },
+   {
+    "name": "Nodule segmentation / detection model",
+    "state": "absent",
+    "evidence": "No detection or segmentation code anywhere. src/models.py:12-21 is a classification-only timm factory (8 classifier ids, num_classes head); no seg/detection head, no Dice/IoU loss. grep for dice|iou|jaccard|hausdorff|faster.rcnn|retina|yolo over src/ scripts/ -> no hits.",
+    "blocking_for": "I5, B6 (the 'end-to-end' claim itself)",
+    "work_needed": "Implement a 2D/3D nodule segmenter or detector + FP-reduction stage, its training loop, its own patient-level split (it must not see S3 test patients), and Dice/sensitivity-per-scan metrics."
+   },
+   {
+    "name": "Nodule-candidate generation",
+    "state": "absent",
+    "evidence": "No candidate generation code. The pipeline never sees a slice that does not already contain an annotated nodule: src/preprocess.py:145-153 iterates only `range(ks.start, ks.stop)` (the consensus bbox z-range). src/metadata.py:23 states non-nodules and malignancy=0 are \"excluded by construction\".",
+    "blocking_for": "I5, error-propagation analysis (a real end-to-end pipeline produces false-positive candidates that S2 never has)",
+    "work_needed": "Build candidate generation + a negative/background sample pool; the master table and preprocessing must be extended to emit non-nodule ROIs (today they cannot)."
+   },
+   {
+    "name": "ROI extraction (exists, but ORACLE - this is the specific thing S3 must replace)",
+    "state": "exists_and_ran",
+    "evidence": "src/preprocess.py:133 `cmask, cbbox, _ = consensus(cl, clevel=clevel, ...)` then src/preprocess.py:140-142 pads the ground-truth bbox by roi_pad_mm and crops. The ROI comes from radiologist contours (D19, DECISIONS.md:240-250), i.e. the label is used to locate the input. 4106 files under outputs/processed/ (641 nodule dirs, lidc_none).",
+    "blocking_for": "Nothing today for S2 (it is the declared S2 design); it is exactly what S3 must replace with predicted ROIs",
+    "work_needed": "S3 needs a parallel preprocessing path that crops from PREDICTED masks and records mask-vs-truth agreement per ROI so error propagation can be quantified."
+   },
+   {
+    "name": "Independent patient-level test cohort (test touched exactly once)",
+    "state": "absent",
+    "evidence": "src/splits.py only implements repeated K-fold: test = fold k (src/splits.py:72), val carved from the rest (src/splits.py:74-87). grep for holdout|held.out|lockbox|final_test over src/ scripts/ -> no hits. All 30 CSVs in outputs/splits/ are `lidc_binary_slice_{patient,random}_rep0_fold{0..4}_{train,val,test}.csv`.",
+    "blocking_for": "SPEC B6 = R1.7 / R3 / R4.2 directly (SPEC.md:180-184: \"genuine held-out patient-level test cohort... touched exactly once\")",
+    "work_needed": "Add a lock-box split function (patients reserved before any CV), a write-once access discipline, and an audit artifact proving the test patients were never in any train/val CSV. None of this exists; the current design has no notion of a cohort outside the CV rotation."
+   },
+   {
+    "name": "S3 dataset dispatch in train.py / datasets.py",
+    "state": "absent",
+    "evidence": "`--dataset` (src/train.py:83) is used only to build a filename tag (src/train.py:107 `tag = f\"{args.dataset}_{args.sample_unit}_...\"`); there is no branch on dataset anywhere. src/datasets.py loads `processed_index_{enhancement}.csv` and joins on (nodule_id, z_position) - LIDC-nodule-ROI only. Verified by running the S3 command (see first row).",
+    "blocking_for": "Any S3 run",
+    "work_needed": "Either a second Dataset class for predicted-ROI inputs plus a real dispatch, or a generalized index schema. The hard coverage gate in src/datasets.py:36-50 also assumes one processed index per enhancement."
+   },
+   {
+    "name": "S3 splits / probs / models / metrics artifacts in outputs/",
+    "state": "absent",
+    "evidence": "`find outputs -iname \"*s3*\" -o -iname \"*e2e*\" -o -iname \"*end2end*\" -o -iname \"*seg*\" -o -iname \"*lung*\"` -> no matches. outputs/splits = 30 files, all lidc_binary_slice. outputs/probs = 40, outputs/models = 40, outputs/history = 41 - all from the 20 canonical S2 subset runs (x2 checkpoints).",
+    "blocking_for": "Reporting any S3 number",
+    "work_needed": "None until the code exists; listed so the inventory is explicit that S3 has never produced an artifact."
+   },
+   {
+    "name": "config.yaml S3 declarations",
+    "state": "stub_or_partial",
+    "evidence": "config.yaml:62 `S3: {dataset: lidc_end2end, task: binary, sample_units: [slice]}  # seg->ROI->classify; independent test` and config.yaml:106 `S3: {repeats: 2, folds: 5}`. Read by no code: src/config_contract.py:58-60 marks the three S3 setting keys 'documentation'; src/config_contract.py:81-82 marks the sizing keys 'deferred'.",
+    "blocking_for": "Nothing runtime; but it is the same class of defect (config asserting a methodology) that D27/D28 exist to prevent",
+    "work_needed": "Nothing mandatory, but note the audit blind spot in the next row."
+   },
+   {
+    "name": "config_contract status for S3 (audit blind spot + a factual error)",
+    "state": "stub_or_partial",
+    "evidence": "src/config_contract.py:58-60 gives experiment.settings.S3.{dataset,task,sample_units} status 'documentation' = \"describes the study; no runtime behaviour is claimed\" (definition at src/config_contract.py:19), NOT 'deferred' = \"belongs to a stage that is NOT implemented. MUST NOT be described as done\" (src/config_contract.py:20-21). Consequence: `python scripts/verify_config_contract.py` prints 16 deferred keys and S3-the-setting is not among them. The single S3 mention in that deferred list, src/config_contract.py:34 'paths.lndb_root': ('deferred', 'LNDb (setting S3) not implemented'), is factually wrong - LNDb is S1 (config.yaml:60).",
+    "blocking_for": "The repo's own honesty machinery (D27): the tool that is supposed to enumerate what is unimplemented does not name S3",
+    "work_needed": "Re-status the three S3 setting keys as 'deferred' with reason 'end-to-end pipeline not implemented: no segmentation, no candidate generation, no independent test cohort'; fix the lndb_root reason to say S1. ~10 minutes, and it makes the gap machine-visible."
+   },
+   {
+    "name": "Segmentation environment dependencies",
+    "state": "absent",
+    "evidence": "In env C:/ProgramData/miniconda3/envs/nodules: monai MISSING, segmentation_models_pytorch MISSING, cv2 MISSING. Present: torch 2.3.1+cu121, timm 1.0.28, pylidc 0.2.3, skimage 0.21.0, scipy 1.15.3. requirements.txt / environment.yml contain no segmentation package (grep for unet|monai|segmentation_models -> no hits).",
+    "blocking_for": "Implementing any learned segmenter",
+    "work_needed": "Add and pin a seg stack (or commit to a skimage/scipy rule-based lung segmenter, which is already installable). Note STATUS.md:108-110 separately records that requirements.txt cannot install the training stack at all - that would have to be fixed first for the reproducibility gate."
+   },
+   {
+    "name": "Raw data for S3 (LIDC full DICOM + contours)",
+    "state": "exists_untested",
+    "evidence": "E:/NODULES/LIDC-IDRI/manifest-1600709154662/LIDC-IDRI contains 1010 patient directories; pylidc 0.2.3 installed and already used to load volumes (src/preprocess.py:138 `scan.to_volume()`). data/README.md:6 lists LIDC as the source for \"S2 flagship, S3\".",
+    "blocking_for": "Nothing - the raw material is on disk; only the code is missing",
+    "work_needed": "Volume-level (not ROI-level) preprocessing does not exist and would be a new, much larger preprocessing product (whole scans, not 256x256 nodule crops). Storage/time not yet estimated. NOT VERIFIED that whole-volume preprocessing fits the disk budget."
+   },
+   {
+    "name": "Segmentation-quality metrics and error-propagation analysis (I5)",
+    "state": "absent",
+    "evidence": "No Dice/IoU/sensitivity code (grep over src/ scripts/ -> no hits). src/stats.py provides only naive_se, nadeau_bengio_se, rho_from_splits, mean_ci, fold_summary, wilcoxon_min_p, wilcoxon_paired, bootstrap_ci (src/stats.py:45-167).",
+    "blocking_for": "I5 (R3/R4 asked explicitly for seg accuracy and error propagation)",
+    "work_needed": "Seg metric module + an analysis that ties per-ROI mask error to downstream classification error; conceptually new (nothing in the repo relates ROI quality to outcome)."
+   },
+   {
+    "name": "Downstream reporting modules S3 would depend on",
+    "state": "stub_or_partial",
+    "evidence": "src/evaluate.py:13 `raise NotImplementedError(\"STAGE 6 ...\")`; src/ensemble.py:12 same; src/figures.py:12 same. src/config_contract.py:111 records evaluate.aggregation as deferred - patient-level aggregation never computed; src/config_contract.py:116 McNemar not implemented; src/config_contract.py:117-118 mechanism analysis not implemented. Working analysis lives in scripts/ (analyze_gap.py, audit_controls.py) and src/stats.py, not in the modules SPEC names.",
+    "blocking_for": "Reporting S3 to the same standard as S2 (bootstrap CIs, patient-level aggregation, confusion matrices, figures)",
+    "work_needed": "These are already on the pre-grid blocking list (STATUS.md:98-110); S3 inherits them - building S3 does not reduce that debt, it multiplies the number of cells that need it."
+   },
+   {
+    "name": "LNDb / S1 (adjacent, only because the contract mislabels it as S3)",
+    "state": "absent",
+    "evidence": "E:/NODULES/LNDB contains only .rar archives and CSVs (data0-5.rar ~24 GB, masks.rar) - no extracted directories (`find LNDB -maxdepth 1 -type d` returns only LNDB itself). No LNDb loader code (grep lndb over src/ scripts/ -> only src/config_contract.py:34 and config.yaml:19).",
+    "blocking_for": "S1, not S3 - included to correct the record: the only 'S3' entry in the deferred list actually refers to S1's dataset",
+    "work_needed": "Out of scope for the S3 lens; noted so the researcher does not read 'paths.lndb_root deferred (setting S3)' as coverage of S3."
+   }
+  ],
+  "summary": "Setting S3 does not exist in any form beyond prose. There is no lung-segmentation, nodule-segmentation, detection, or candidate-generation code anywhere in src/ or scripts/; no independent held-out test cohort mechanism (splits.py implements only repeated K-fold, test = fold k); no S3 splits, probs, models, or metrics have ever been written to outputs/; and `--dataset` is a filename tag with no dispatch, so `python -m src.train --dataset lidc_end2end ...` dies on a missing split CSV. What exists today is the opposite of S3's premise: ROIs are cropped from the radiologists' ground-truth consensus bbox (src/preprocess.py:133-142), only nodule-bearing slices are ever preprocessed, and no negative/background samples exist by construction (src/metadata.py:23) - so the current pipeline could not even be pointed at predicted ROIs. Building S3 is a greenfield sub-project of roughly seven components (lung segmenter + lung masks, nodule segmenter/detector with its own patient-disjoint training split, candidate generation with negatives, whole-volume preprocessing, predicted-ROI dataset path, lock-box test cohort with write-once discipline, and Dice/error-propagation metrics), on top of a segmentation stack that is not installed (monai, smp, cv2 all MISSING in env `nodules`) and the already-blocking evaluate.py/ensemble.py/figures.py stubs it would need for reporting. One integrity note within scope: the repo's own contract marks the S3 keys 'documentation' rather than 'deferred' (src/config_contract.py:58-60), so `verify_config_contract.py` does not list S3 among the 16 unimplemented items, and the one deferred entry that names S3 is wrong - it describes LNDb, which is S1 (src/config_contract.py:34 vs config.yaml:60)."
+ },
+ {
+  "components": [
+   {
+    "name": "build_model() — architecture factory (explicit allow-list, NOT a generic timm passthrough)",
+    "state": "exists_and_ran",
+    "evidence": "src/models.py:12-27. `_TIMM` is a hardcoded dict of 8 config-name -> timm-id pairs; `build_model` raises ValueError for any name not in it (models.py:25-26), then calls `timm.create_model(_TIMM[name], pretrained=..., num_classes=...)`. It is a 33-line file, the whole of src/models.py. Called from src/train.py:122 and scripts/analyze_gap.py:50 (grep for `build_model` returns only these two call sites).",
+    "work_needed": "none for the 8 listed names. Adding any architecture outside the dict requires editing src/models.py — there is no config-driven or free-form timm passthrough."
+   },
+   {
+    "name": "Architecture instantiation + forward pass — ALL 8 succeed (tested, CPU, pretrained=False)",
+    "state": "exists_untested",
+    "evidence": "Ran C:\\ProgramData\\miniconda3\\envs\\nodules\\python.exe on a probe that calls build_model(n,2,pretrained=False) then a forward at input_size_for(n) for every key in _TIMM. Result — build ok + forward ok(2,2) for ALL 8: resnet50, densenet121, efficientnet_b0, efficientnet_b3, convnext_tiny, inception_v3, swin_tiny(@224), maxvit_tiny_tf_224(@224). Env: timm 1.0.28, torch 2.3.1+cu121, torchvision 0.18.1+cu121, cuda True. Zero build failures, zero forward failures at their own resolution.",
+    "work_needed": "none to instantiate. 'exists_untested' because 6 of 8 have never been trained (see next row) — instantiating is not the same as surviving 30 epochs."
+   },
+   {
+    "name": "Architectures that have ever produced an artifact in outputs/",
+    "state": "exists_and_ran",
+    "evidence": "ONLY densenet121 and efficientnet_b0. `ls outputs/models` = 40 files = 2 archs x 2 arms x 5 folds x 2 checkpoints; `ls outputs/probs` = 40; `ls outputs/history | sed 's/.*fold[0-9]_//' | sort -u` returns exactly 4 stems (densenet121, densenet121_final, efficientnet_b0, efficientnet_b0_final) + one PNG. outputs/metrics has canonical_gap_densenet121.txt and canonical_gap_efficientnet_b0.txt and no others. grep -i for swin|maxvit|convnext|inception_v3|resnet50 in journal.md: NO MATCHES — they were never even attempted.",
+    "work_needed": "resnet50, convnext_tiny, inception_v3, swin_tiny, maxvit_tiny_tf_224, efficientnet_b3 have zero training evidence. R1.5 (transformer baseline) is closable only by running them; nothing on disk closes it today."
+   },
+   {
+    "name": "VRAM feasibility on the 8 GB RTX 4060 Ti (SPEC §2.4 claim 'all fit')",
+    "state": "exists_and_ran",
+    "evidence": "I ran a training-shaped probe (fwd+bwd, AMP autocast+GradScaler, Adam, batch=8, 2 steps) per arch on the real GPU and read torch.cuda.max_memory_allocated(): resnet50 0.86 GB · densenet121 0.83 · efficientnet_b0 0.52 · convnext_tiny 0.86 · inception_v3 0.47 · swin_tiny 1.01 (@224) · maxvit_tiny_tf_224 1.74 (@224). All OK, no OOM. (nvidia-smi showed 4.5/8.1 GB already consumed by desktop apps at the time; the per-process peak_alloc figure is unaffected by that.)",
+    "work_needed": "none. The 8 GB claim holds with a large margin at the configured batch_size 8 + grad_accum 4. maxvit is the heaviest at ~1.7 GB."
+   },
+   {
+    "name": "input_size_for() — 256 default, 224 for swin/maxvit",
+    "state": "exists_and_ran",
+    "evidence": "src/models.py:30-32 returns 224 for ('swin_tiny','maxvit_tiny_tf_224') else 256. Consumed correctly in the TRAINING path: src/train.py:106 `size = input_size_for(args.arch)` -> passed to LidcDataset (train.py:110-112) -> src/datasets.py:60-61 `if size != 256: tfs.append(T.Resize((size,size), antialias=True))`, applied before Normalize. So probs written by train.py would be at the right resolution for transformers.",
+    "work_needed": "none in the training path."
+   },
+   {
+    "name": "scripts/analyze_gap.py — imports input_size_for and never uses it (CRASHES on transformers, not silent)",
+    "state": "stub_or_partial",
+    "evidence": "scripts/analyze_gap.py:35 imports `input_size_for`; grep across the repo shows the only other occurrences are src/models.py and src/train.py — it is never called in analyze_gap.py. nodule_preds (analyze_gap.py:50-57) builds the model then feeds the raw .npy straight in: `torch.from_numpy(np.load(p)).permute(2,0,1)` = 256x256, no resize. I TESTED the consequence: forward at 256 gives swin_tiny -> `AssertionError: Input height (256) doesn't match model (224)`; maxvit_tiny_tf_224 -> `AssertionError: height (64) must be divisible by window (7)`. Both CNN cases (incl. inception_v3, convnext_tiny) pass at 256.",
+    "work_needed": "Add `size=input_size_for(arch)` + a resize in nodule_preds before scoring, OR score from the persisted outputs/probs/*.npz. NOTE — this corrects outputs/metrics/audit_raw.json:283-285, which calls it 'evaluated at the wrong resolution': for these two models timm asserts, so it is a hard crash. That is the safer failure mode, but it means the headline per-nodule gap CANNOT be computed for swin/maxvit today."
+   },
+   {
+    "name": "inception_v3 — normalization mismatch with its ImageNet weights",
+    "state": "stub_or_partial",
+    "evidence": "src/datasets.py:18-19 hardcodes IMAGENET_MEAN/STD (0.485.../0.229...) for every architecture. I queried timm's pretrained cfgs: inception_v3 resolves to `timm/inception_v3.tv_in1k` whose cfg mean and std are BOTH (0.5,0.5,0.5). All 7 other entries use the ImageNet constants that datasets.py hardcodes. cfg input_size is also (3,299,299) vs our 256 (fully-conv, so 256 forwards fine — verified).",
+    "work_needed": "Either read mean/std from `timm.models.get_pretrained_cfg(...)` per arch, or drop inception_v3, or document that its ImageNet init is fed off-statistics inputs. Not a crash; it is a fine-tuning handicap and an easy hostile-reviewer target given the paper's 'code == manuscript' promise."
+   },
+   {
+    "name": "Pretrained (ImageNet) weights — only 2 of 8 cached locally; the rest need a download",
+    "state": "not_verified",
+    "evidence": "`ls C:/Users/Nycolas/.cache/huggingface/hub` contains models--timm--densenet121.ra_in1k and models--timm--efficientnet_b0.ra_in1k ONLY (plus unrelated LLM/ENMG models). All my instantiation tests used pretrained=False; train.py:122 uses pretrained=True. I resolved hub metadata WITHOUT downloading: resnet50.a1_in1k 102 MB · convnext_tiny.in12k_ft_in1k 114 MB · inception_v3.tv_in1k 96 MB · swin_tiny_patch4_window7_224.ms_in1k 114 MB · maxvit_tiny_tf_224.in1k 124 MB · efficientnet_b3.ra2_in1k 49 MB — all resolve, so the network path works.",
+    "work_needed": "~500 MB of first-use downloads from HuggingFace when the grid first runs a new arch. I did not download them (downloading files needs your explicit go-ahead). A grid launched offline, or with a HF outage, would fail at run 1 of each new arch. Pre-fetching once is a one-line loop and would de-risk the grid."
+   },
+   {
+    "name": "config.yaml `architectures.primary` / `architectures.sota` — declared but read by NO code",
+    "state": "absent",
+    "evidence": "config.yaml:156-158 declares primary: [resnet50, densenet121, efficientnet_b0, convnext_tiny, inception_v3] and sota: [swin_tiny, maxvit_tiny_tf_224]. grep for 'architectures' across all .py/.ps1/.sh returns only src/config_contract.py:105-106, which explicitly classifies both as 'deferred' — i.e. the contract itself certifies no code reads them ('only densenet121 + efficientnet_b0 are run; arch is a CLI argument', 'transformer baselines not run yet').",
+    "work_needed": "Architecture selection is 100% CLI-driven. The grid arch set must be passed to scripts/run_grid.ps1 -Archs (default at run_grid.ps1:34 is the string \"densenet121,efficientnet_b0\"). Either wire the config keys into the driver or accept that config.yaml does not describe the grid — the latter is the same class of config-asserts-something-untrue defect as D27/stratify_key."
+   },
+   {
+    "name": "scripts/run_grid.ps1 — can drive any allow-listed arch, but hardcodes sample-unit=slice",
+    "state": "exists_and_ran",
+    "evidence": "run_grid.ps1:34 `-Archs` is a comma-string split at :57 and looped at :105; each arch is passed through to `--arch` (run_grid.ps1:123-126). An unknown name would fail fast at build_model (models.py:26) after the gates. Note :124 hardcodes `--sample-unit slice` and `--rep 0`, and the run tag at :108 bakes in `_slice_..._rep0_`.",
+    "work_needed": "none for architectures. (Out of this lens but relevant to grid sizing: nodule sample_unit and rep>0 are not reachable through the driver.)"
+   },
+   {
+    "name": "src/ensemble.py — soft-voting over the primary architecture set",
+    "state": "stub_or_partial",
+    "evidence": "src/ensemble.py is 416 bytes; `main()` is `raise NotImplementedError(\"STAGE 6 — implement after training.\")`. config.yaml ensemble.members [resnet50, densenet121, efficientnet_b0] is classified 'deferred' in src/config_contract.py:107-110 ('ensembling stage not implemented').",
+    "work_needed": "Full implementation. SPEC §2.4 'Ensemble: soft-voting over the primary set' has no code and no artifact. Only ensemble.threshold is actually consumed (train.py:192)."
+   },
+   {
+    "name": "src/evaluate.py — per-architecture metrics tables + bootstrap CIs (I3, B4)",
+    "state": "stub_or_partial",
+    "evidence": "src/evaluate.py is 505 bytes; `main()` is `raise NotImplementedError(\"STAGE 6 — implement after training (SPEC §6.6).\")`. Confirms STATUS.md:101-104. The only scorer that exists is scripts/analyze_gap.py — which is the file with the transformer resize defect above.",
+    "work_needed": "Implement, or the 'complete per-model metrics' deliverable (§5 I3) stays open no matter how many architectures the grid runs."
+   },
+   {
+    "name": "src/mechanism.py — Grad-CAM/SHAP (arch-dependent; SPEC §2.6a / B10)",
+    "state": "absent",
+    "evidence": "`ls src/mechanism.py` -> 'No such file or directory'. src/ contains no attribution code. src/config_contract.py:117-118 marks mechanism.attribution and mechanism.quantify_leakage 'deferred' ('mechanism analysis (SPEC 2.6) not implemented').",
+    "work_needed": "Written from scratch. Architecture-relevant caveat: Grad-CAM target-layer selection differs per family, and swin/maxvit need attention-aware or reshape-transform handling — it is not one implementation reused across 7 archs."
+   }
+  ],
+  "summary": "All 7 SPEC-named architectures plus efficientnet_b3 instantiate and forward-pass cleanly today (timm 1.0.28 / torch 2.3.1) and all fit the 8 GB card comfortably at batch 8 with AMP (measured peak 0.47–1.74 GB), so no architecture is blocked by code or hardware. But only densenet121 and efficientnet_b0 have ever trained — resnet50, convnext_tiny, inception_v3, swin_tiny and maxvit_tiny_tf_224 have zero artifacts in outputs/ and are not even mentioned in journal.md, and config.yaml's `architectures.primary`/`sota` lists are read by no code (arch is CLI-only, run_grid.ps1 defaults to the two CNNs). Three concrete defects stand between \"instantiates\" and \"usable in the grid\": scripts/analyze_gap.py imports input_size_for and never calls it, so scoring swin/maxvit hard-crashes on an AssertionError at 256 (not a silent wrong number, correcting audit_raw.json); datasets.py hardcodes ImageNet mean/std while inception_v3's timm weights expect 0.5/0.5; and 5 of 8 pretrained checkpoints (~500 MB) are not cached locally and would download from HuggingFace on first grid run. Downstream, ensemble.py and evaluate.py are NotImplementedError stubs and mechanism.py does not exist, so per-architecture metric tables, soft-voting and Grad-CAM close no reviewer point today regardless of how many architectures the grid trains."
+ },
+ {
+  "components": [
+   {
+    "name": "S1 pipeline (any LNDb-specific code in src/)",
+    "state": "absent",
+    "evidence": "`grep -rn -i \"lndb\" src/ scripts/` returns exactly ONE hit in Python code: src/config_contract.py:34 (a 'deferred' declaration). No loader, no metadata builder, no preprocessor, no Dataset class, no split logic, no driver mentions LNDb anywhere.",
+    "work_needed": "The entire S1 pipeline must be built: LNDb metadata builder, .mhd/.raw volume reader, ROI/slice extraction, subtype labeller, split table, Dataset class, multiclass train/eval path, and a grid driver hook. Nothing can be reused verbatim except the split ALGORITHM in src/splits.py:36-98 (which is dataset-agnostic once fed a different sample table)."
+   },
+   {
+    "name": "paths.lndb_root config key",
+    "state": "stub_or_partial",
+    "evidence": "config.yaml:19 `lndb_root: \"E:/NODULES/LNDb\"`. Declared `('deferred', 'LNDb (setting S3) not implemented')` at src/config_contract.py:34. No code reads it (grep for 'lndb_root' outside config.yaml/config_contract.py returns nothing).",
+    "work_needed": "Contract text is itself WRONG: LNDb is setting S1 (config.yaml:60, SPEC.md:161), not S3 (S3 = lidc_end2end, config.yaml:62). Fix the declaration string, and flip to 'consumed' only when code actually reads the key."
+   },
+   {
+    "name": "LNDb raw CT volumes on disk",
+    "state": "exists_untested",
+    "evidence": "E:\\NODULES\\LNDB\\ contains data0-data5.rar + testdata0-1.rar. `7z l` on each counts .mhd entries: 43+43+39+39+37+35 = 236 train scans, 29+29 = 58 test scans = 294 CTs total (matches LNDb v4). Archives list cleanly; uncompressed total = 54.3 GB (data 42.5 GB + testdata 10.8 GB). E: has 3.3 TB free.",
+    "work_needed": "Data is present but STILL COMPRESSED — no extracted .mhd/.raw exists anywhere on disk (`ls E:\\NODULES\\LNDB` shows only archives). Extraction is not scripted; must be run (7z.exe and UnRAR.exe are installed at C:\\Program Files\\7-Zip and C:\\Program Files\\WinRAR, verified). Archive CRC integrity NOT VERIFIED (only headers were listed, not tested)."
+   },
+   {
+    "name": "LNDb radiologist segmentation masks",
+    "state": "exists_untested",
+    "evidence": "E:\\NODULES\\LNDB\\masks.rar, 22 MB compressed / 43.87 GB uncompressed, 960 files (per-radiologist LNDb-XXXX_radN.mhd/.raw pairs, IDs up to LNDb-0312).",
+    "work_needed": "Unextracted. Needed if S1 crops ROIs from consensus masks the way LIDC S2 does (src/preprocess.py:30 uses pylidc.utils.consensus, which has no LNDb equivalent). LNDb ships per-radiologist masks with no consensus utility — a consensus/agreement rule for LNDb must be written from scratch."
+   },
+   {
+    "name": "LNDb nodule labels (texture / subtype ground truth)",
+    "state": "exists_and_ran",
+    "evidence": "Read directly: trainset_csv.zip::trainNodules_gt.csv = 1219 merged findings over 229 CTs; 768 have Nodule==1. Texture column = 'Text' (mean radiologist score). Test set has NO labels: testNodules.csv header is only `LNDbID,FindingID,x,y,z` (2900 rows, coordinates only) and allNods.csv contains ZERO of the 58 testCTs IDs (verified with pandas isin → 0).",
+    "work_needed": "Usable S1 cohort is the 236 TRAIN CTs only (challenge test labels are withheld). Effective sample = 768 labelled nodules across ~229 scans, not 294. This must be stated honestly in any grid sizing."
+   },
+   {
+    "name": "GGO / part-solid / solid class rule",
+    "state": "exists_untested",
+    "evidence": "Official thresholds found in the LNDb-shipped script: LNDB/scripts.zip::calcFleischner.py contains `texthr = [7/3,11/3]` (Text<2.33 = GGO, 2.33-3.67 = part-solid, >3.67 = solid). Applying it myself to trainNodules_gt.csv (Nodule==1) gives class counts GGO=38, part-solid=58, solid=672.",
+    "work_needed": "Rule exists in the vendor script but is NOT implemented in this repo (no 'texture', 'GGO' or 'part-solid' string in src/ or config.yaml — grep confirms only SPEC.md:161 and config.yaml:60 mention the words, as prose). ALSO A SIZING PROBLEM: 5%/7.6%/87.5% class balance; the minority class has n=38 nodules TOTAL, so a 5-fold test partition holds ~8 GGO nodules. SPEC's own power argument (SPEC.md ~§2.2, n>=10 paired points) does not address per-class CIs this thin."
+   },
+   {
+    "name": "patient_id / grouping key for LNDb — the study's whole contrast",
+    "state": "absent",
+    "evidence": "Checked EVERY shipped identifier source. CSV headers (all 8 files in LNDB/ + all 5 in trainset_csv.zip) contain only `LNDbID` (a SCAN id) — no patient/subject column: LNDbAcqParams.csv, allNods.csv, chars_trainNodules.csv, rad2Fleischner.csv, report.csv, testCTs.csv, testNodules.csv, text2Fleischner.csv, trainCTs.csv, trainFolds.csv, trainNodules.csv, trainNodules_gt.csv, trainFleischner.csv. Extracted LNDb-0001.mhd from data0.rar: MetaImage header carries only ObjectType/Offset/ElementSpacing/DimSize/ElementDataFile — no PatientID. The official fold file (trainFolds.csv) groups by LNDbID, and LNDB/scripts.zip::getFolds.py splits on LNDbID.",
+    "work_needed": "BLOCKING FOR ARM A. LNDb is published as 294 CT scans from a smaller number of unique patients (repeat scans exist), so grouping by LNDbID is scan-level, not patient-level — it silently leaks any repeat-scan patient across arms and would make S1's 'patient-level' arm a misnomer. Either (a) obtain/derive a scan→patient mapping (source unknown; the LNDb README.pdf could not be text-extracted — NOT VERIFIED whether it documents one), or (b) redefine S1's unit as SCAN-level explicitly in SPEC/manuscript and defend it, or (c) drop S1. This decision must be made BEFORE sizing the grid."
+   },
+   {
+    "name": "src/metadata.py — LNDb metadata builder",
+    "state": "absent",
+    "evidence": "src/metadata.py:49 `import pylidc as pl`; main() at src/metadata.py:435 takes only `--config` (no --dataset) and hardcodes the LIDC path at src/metadata.py:445 (`cfg[\"paths\"][\"lidc_dicom_root\"]`). Outputs are fixed names lidc_nodules.csv / lidc_master.csv. It handles LIDC/pylidc ONLY.",
+    "work_needed": "Write a separate LNDb metadata builder producing an lndb_master.csv with the same schema splits.py expects (patient_id, nodule_id, z_position, label, cohort_main, is_representative_slice). Requires solving the patient_id problem above and converting LNDb world coordinates (x,y,z in mm) to slice indices via each scan's mhd Offset/ElementSpacing."
+   },
+   {
+    "name": "src/preprocess.py — LNDb volume reading / ROI extraction",
+    "state": "absent",
+    "evidence": "src/preprocess.py:29-30 `import pylidc as pl` / `from pylidc.utils import consensus`; CLI (src/preprocess.py:166-170) exposes only --config/--limit-scans/--enhancement — no dataset switch. It can only read DICOM through pylidc.",
+    "work_needed": "LNDb ships MetaImage (.mhd/.raw), which pylidc cannot open. Needs a new reader + the same HU clip/resize/channel-replicate chain, writing a processed_index_<enh>.csv for LNDb."
+   },
+   {
+    "name": "MetaImage (.mhd) reading dependency",
+    "state": "absent",
+    "evidence": "requirements.txt:36 — `# SimpleITK==2.5.5  # Stage-2 volume resampling` is COMMENTED OUT, under the header '# --- optional, NOT installed and used by no result in outputs/ ---'. Confirmed by import test in the nodules env: SimpleITK MISSING, nibabel MISSING, cv2 MISSING (pylidc 0.2.3, torch 2.3.1+cu121, timm 1.0.28, skimage 0.21.0 all OK).",
+    "work_needed": "Install SimpleITK (or write a stdlib .mhd header parser + numpy memmap of the .raw, which is trivial for these uncompressed MET_SHORT volumes and avoids a new dependency). Also no rar handling in Python (rarfile MISSING) — extraction must go through the installed 7z.exe/UnRAR.exe."
+   },
+   {
+    "name": "src/splits.py — dataset dispatch",
+    "state": "stub_or_partial",
+    "evidence": "`--dataset` (src/splits.py:114) is used ONLY to build the output filename tag (src/splits.py:90). The sample table is hardcoded: src/splits.py:32 `pd.read_csv(os.path.join(D, \"lidc_master.csv\"))`. Passing `--dataset lndb_multiclass` today would silently re-split LIDC and write LNDb-named CSVs.",
+    "work_needed": "Small but REAL change: parameterize _cohort() by dataset. Note the leakage assertion (src/splits.py:101-108) asserts on patient_id, so it will be meaningless/misleading for LNDb until the grouping key exists. The fold-assignment algorithm itself is reusable."
+   },
+   {
+    "name": "src/datasets.py — LNDb torch Dataset",
+    "state": "absent",
+    "evidence": "Only class is `LidcDataset` (src/datasets.py:30); index path hardcoded to processed_index_{enhancement}.csv (src/datasets.py:24); merge key is (nodule_id, z_position); labels read via `m[\"label\"].astype(int)` (src/datasets.py:48).",
+    "work_needed": "Generalizable with modest edits (it is mostly schema-driven), but the hard coverage gate at src/datasets.py:36-46 and the LIDC-specific index filename need parameterizing."
+   },
+   {
+    "name": "Multiclass training support (3-class S1 task)",
+    "state": "absent",
+    "evidence": "src/train.py:122 `build_model(args.arch, num_classes=2, pretrained=True)` — literal 2, not read from config. src/train.py:73 `torch.softmax(out.float(), 1)[:, 1]` keeps only the positive-class column. src/train.py:76 `roc_auc_score(y_true, y_prob)` binary form. Class weights at src/train.py:124-126 loop over `(0, 1)` only. So the ENTIRE saved-probability contract (outputs/probs/*.npz) is binary.",
+    "work_needed": "num_classes must come from the setting; probs must be saved as the full (N,C) matrix; AUC must become macro/OvR multi_class; class weighting must generalize. This is a change to the CANONICAL training path that all 20 completed LIDC runs used — it needs a no-regression check against the existing binary results."
+   },
+   {
+    "name": "Multiclass metrics / stats",
+    "state": "stub_or_partial",
+    "evidence": "src/evaluate.py:12 is still `raise NotImplementedError(\"STAGE 6 ...\")` (the whole file is 16 lines). src/stats.py IS implemented (naive_se:45, nadeau_bengio_se:50, rho_from_splits:62, mean_ci:67, wilcoxon_paired:103, bootstrap_ci:125) but its driver (src/stats.py:177,200) imports roc_auc_score/log_loss/brier_score_loss and treats y_prob as a 1-D binary vector.",
+    "work_needed": "bootstrap_ci and the paired Wilcoxon machinery are dataset-agnostic and reusable; the metric callables and the y_prob shape assumption are not. Per-class CIs on 38 GGO nodules will be very wide — verify feasibility before committing S1 to the grid."
+   },
+   {
+    "name": "Grid driver hook for S1",
+    "state": "absent",
+    "evidence": "scripts/run_grid.ps1 hardcodes the dataset string in three places: line 68 and line 108 build run tags as `\"lidc_binary_slice_\" + ...`, and line 123 passes `--dataset lidc_binary` literally.",
+    "work_needed": "Parameterize the dataset/setting, or write a second driver. Also note config.yaml repetition.per_setting.S1 {repeats:2, folds:5} is declared 'deferred' at src/config_contract.py:79-80 — the grid sizing keys are read by nothing."
+   },
+   {
+    "name": "Any S1 artifact in outputs/",
+    "state": "absent",
+    "evidence": "`find outputs -iname \"*lndb*\"` → zero hits. Every run artifact is prefixed lidc_binary (206 files by that prefix); outputs/metadata/ holds only lidc_master.csv, lidc_nodules.csv, processed_index_{none,clahe}.csv; outputs/processed/ holds only lidc_clahe/ and lidc_none/; outputs/splits/ holds only lidc_binary_* CSVs; outputs/results/ holds only stats_nodule.json.",
+    "work_needed": "None possible until the pipeline exists. S1 has produced NOTHING — not one split CSV, not one probability file."
+   },
+   {
+    "name": "SPEC.md requirement for S1 (what the grid would owe)",
+    "state": "not_verified",
+    "evidence": "SPEC.md mentions LNDb in only 4 lines total. SPEC.md:161 = task (multiclass GGO/part-solid/solid), contrast column says 'full 2×2' — but SPEC.md:223 and DECISIONS D4 (DECISIONS.md:66-77) say S1 uses the PRINCIPAL AXIS ONLY (sample=slice), 2 repeats × 5 folds = n=10 paired points, 7 architectures × 1 sample_unit × 2 arms × 10 = 140 runs. config.yaml:60 agrees with D4 (sample_units: [slice]).",
+    "work_needed": "SPEC.md:161 CONTRADICTS SPEC.md:223 + D4 on whether S1 runs the full 2×2. Resolve before sizing — it is the difference between 140 and 280 runs. Beyond those four lines SPEC gives S1 no preprocessing spec, no label rule, no cohort definition and no sample-unit definition; there is no written contract for S1 to implement against."
+   }
+  ],
+  "summary": "Setting S1 does not exist as code in any form: a repo-wide grep for 'lndb' finds exactly one Python hit, src/config_contract.py:34, which is a 'deferred' declaration (and it mislabels LNDb as setting S3 — it is S1 per config.yaml:60 and SPEC.md:161). No LNDb loader, metadata builder, preprocessor, Dataset class, split path or driver hook exists; src/metadata.py and src/preprocess.py are pylidc-only, src/splits.py:32 hardcodes lidc_master.csv while its --dataset flag only renames output files, and src/train.py:122 hardcodes num_classes=2 with a binary-only probability contract (src/train.py:73,76) — so the 3-class task is structurally unsupported end to end. outputs/ contains zero LNDb artifacts. The DATA is present and complete by count (294 CTs across 8 .rar archives = 236 train + 58 test, plus masks.rar, 54 GB + 44 GB uncompressed, 3.3 TB free) but is entirely UNEXTRACTED, and the env lacks any MetaImage reader (SimpleITK is commented out at requirements.txt:36 and is not installed). Two findings should gate the grid decision before any code is written: (1) NO patient identifier exists anywhere in the LNDb release — verified across all 13 shipped CSVs and inside an extracted .mhd header — so the patient-vs-random contrast, which is the entire study, cannot be constructed at patient level from this data as delivered; and (2) the labels are usable for only the 236 train CTs (challenge test labels are withheld: testNodules.csv is coordinates only) giving 768 labelled nodules whose subtype balance, under the official LNDb rule texthr=[7/3,11/3], is 38 GGO / 58 part-solid / 672 solid — roughly 8 minority-class nodules per test fold at 5 folds."
+ },
+ {
+  "summary": "The canonical config's 30-epoch cap is ALREADY binding at 250 patients in the random arm and is the single biggest at-risk item at 740: measured across outputs/history/*.json, the patient arm converges at best_epoch median 4 (range 2-17) and 10/10 runs would have fired patience-10 by epoch 27, while the random arm converges at median 23 (range 16-30), 8/10 (not 6/10) never fire patience within 30 epochs, one selects at exactly epoch 30, and 5/10 collect >7% of their total val_loss improvement in epochs 21-30. VRAM headroom is real but unmeasured in the way that matters: train.py records only torch.cuda.max_memory_allocated() (0.853 GB densenet121 / 0.583 GB efficientnet_b0), never max_memory_reserved or process footprint, and nvidia-smi right now shows 4487 of 8188 MiB already consumed by desktop apps — so \"8 GB minus 0.85\" is not the headroom that exists. Critically, NOTHING in outputs/ measures best_epoch at any cohort size other than 250, so whether epochs-to-convergence is invariant or shrinks with 3.36x data is NOT VERIFIED and cannot be reasoned to a conclusion from this repo. Two prerequisites block the settling measurement outright: 7328 of 11026 cohort slices are not preprocessed, and no 740-patient split CSVs exist.",
+  "components": [
+   {
+    "name": "Epoch-budget evidence: best_epoch / early_stop_would_fire_at per run",
+    "state": "exists_and_ran",
+    "evidence": "src/train.py:171-180 computes both and writes them at src/train.py:198; 20 canonical JSONs in outputs/history/. Extracted: patient best_epoch [2,2,3,4,4,4,7,9,10,17] median 4.0, ES never fired 0/10; random [16,16,22,22,23,23,28,28,28,30] median 23.0, ES never fired 8/10.",
+    "work_needed": "none — this is the measured basis for the epoch decision",
+    "blocking_for": "LENS: is 30 epochs adequate at 740 patients"
+   },
+   {
+    "name": "30-epoch cap is BINDING in the random arm (measured at 250 patients)",
+    "state": "exists_and_ran",
+    "evidence": "outputs/history/*random*.json: 8/10 have early_stop_would_fire_at=null; 4/10 select best_epoch >=28; lidc_binary_slice_random_rep0_fold1_efficientnet_b0 selects best_epoch=30 = the cap exactly. Late-improvement share (min(vl[:20]) vs min(vl)): densenet fold3 25.7%, densenet fold2 11.7%, effnet fold2 10.8%, effnet fold3 8.1%, effnet fold1 7.2%.",
+    "work_needed": "Decide before the grid: raise max_epochs (D22 amendment, pre-registered) or declare the cap as a documented conservative truncation of the random arm. It is not currently either.",
+    "blocking_for": "D22 canonical config validity at 740; the _final PROBE definition"
+   },
+   {
+    "name": "Live early stopping during training (patience 10)",
+    "state": "stub_or_partial",
+    "evidence": "src/train.py:164-165 implements the break, but scripts/run_grid.ps1:38 sets $Patience=30 by default and passes it at run_grid.ps1:126, so patience can never fire in a 30-epoch run. 19 of 20 canonical runs show epochs_run=30. Selection is post-hoc argmin (src/train.py:172) plus a replay audit.",
+    "work_needed": "At 740 this is the mechanism that makes 'compliant' unfalsifiable: when ES never fires within the cap, check_checkpoint_fidelity cannot distinguish protocol-compliant from unverifiable. The journal states this outright for densenet f3 ('nao era errado, era inverificavel'). Needs a rule before scaling to ~700 runs.",
+    "blocking_for": "checkpoint-fidelity certification at grid scale"
+   },
+   {
+    "name": "scripts/check_checkpoint_fidelity.py",
+    "state": "exists_and_ran",
+    "evidence": "Ran it: prints 20 rows all 'match', 'OK - every canonical checkpoint equals the early-stopped selection', exit 0. Output artifact outputs/metrics/checkpoint_fidelity.txt (Jul 20 16:25).",
+    "work_needed": "none for the subset; see the row above for its blind spot when ES never fires",
+    "blocking_for": "reporting the canonical gap"
+   },
+   {
+    "name": "scripts/remediate_checkpoints.ps1 (the 2 non-compliant checkpoints)",
+    "state": "exists_and_ran",
+    "evidence": "Backups at outputs/_pre_remediation/20260720-155734/ (12 files); outputs/logs/remediate_20260720-155734.log. Compared pre vs post: densenet random f3 best 28 ES 21 -> best 28 ES None (testAUC 0.9708->0.9772); effnet random f4 best 29 ES 26 -> best 16 ES 26, epochs_run 26 (testAUC 0.9604->0.9623).",
+    "work_needed": "none — STATUS.md line 28 still says 'REPAIR PENDING'; that claim is STALE and should be corrected",
+    "blocking_for": "STATUS.md accuracy"
+   },
+   {
+    "name": "Cross-scale evidence: best_epoch at any cohort size other than 250",
+    "state": "absent",
+    "evidence": "outputs/history/ contains exactly 41 files: 20 canonical + 20 _final + curves_validation_run.png, all rep0/seed42 on the 250-patient subset (verified by listing). Journal 2026-07-19 records that pre-amendment runs and 10 EfficientNet models were purged. No 50-patient or 740-patient history survives.",
+    "work_needed": "This is the gap. Nothing in the repo licenses a claim about how epochs-to-convergence scales with cohort size. Whether steps-to-memorize or epochs-to-memorize is the invariant is undetermined — at 250 an epoch is ~72 optimizer steps (floor(2324/8)=290 batches / accum 4); at 740 it is ~243. If steps are invariant, random best_epoch drops to ~7 and 30 is generous; if epochs are invariant, it stays 16-30 and 30 truncates. Both are consistent with everything measured.",
+    "blocking_for": "LENS — this is precisely what must not be asserted without measurement"
+   },
+   {
+    "name": "THE SETTLING MEASUREMENT: one 740-patient random-arm run with an extended budget",
+    "state": "absent",
+    "evidence": "Not run; blocked by the two rows below. The patient arm does not need it — 0/10 runs come within 13 epochs of the cap and 10/10 fire patience by epoch 27.",
+    "work_needed": "After preprocessing + grid splits: ONE run, efficientnet_b0 (cheapest, and the arch that hit best_epoch=30 exactly at 250), arm=random, fold 0, with `--max-epochs 60 --patience 10`. Read best_epoch and early_stop_would_fire_at from the resulting outputs/history JSON. Decision rule fixed BEFORE running: if best_epoch <= 20 and early_stop_would_fire_at <= 30, the 30-cap holds unchanged; if best_epoch > 25, or ES has not fired by epoch 60, the cap is truncating and max_epochs must be raised as a declared D22 amendment before any grid run. Projected cost from measured per-run times x 3.36 data scaling: ~50-55 min. That is the entire measurement.",
+    "blocking_for": "whether D22's max_epochs:30 survives to the grid"
+   },
+   {
+    "name": "Full 740-patient cohort preprocessing",
+    "state": "absent",
+    "evidence": "Ran `verify_coverage.py --phase grid`: 'FULL cohort (grid stage): 11026 slices -> missing .npy: 7328'; gate FAILED. outputs/processed/lidc_none holds 3699 .npy (2.909 GB, mean 787 KB).",
+    "work_needed": "Run src/preprocess.py over the remaining 7328 slices. Projected on-disk size for the full cohort: 8.67 GB (measured mean size x 11026). Machine RAM is 34.3 GB, so the full set still fits in OS page cache — the D22(vii) finding that disk was only 3% of run time should survive the scale-up. That is a measured reassurance, not a timing measurement of the preprocessing job itself.",
+    "blocking_for": "any 740-patient run, including the settling measurement"
+   },
+   {
+    "name": "740-patient split CSVs",
+    "state": "absent",
+    "evidence": "outputs/splits/ contains 30 files, all *_rep0_fold{0..4}_{train,val,test}.csv for the 250-patient subset. Verified sizes: patient fold0 train 2324 / val 220 / test 740 (175/25/50 patients); random fold0 2299/328/657. src/splits.py:119 exposes --limit-patients (0 = all), so generation is possible but has not been done.",
+    "work_needed": "Generate with --limit-patients 0, applying the D28(i) fold-balance rule prospectively as decided in DECISIONS D28",
+    "blocking_for": "the settling measurement; the grid"
+   },
+   {
+    "name": "Data-scale factor for the grid (measured)",
+    "state": "exists_and_ran",
+    "evidence": "Coverage gate output: subset pool in use by splits = 3284 slices / 565 nodules / 250 patients; full cohort = 11026 slices / 1695 nodules / 740 patients. Ratio 3.357x on slices.",
+    "work_needed": "none — but see the runtime row; this factor is missing from the repo's own grid estimate",
+    "blocking_for": "grid sizing arithmetic"
+   },
+   {
+    "name": "Grid wall-clock projection",
+    "state": "stub_or_partial",
+    "evidence": "Measured per-run at 250 patients from outputs/logs/grid_20260719-165744.log: densenet121 1015-1105 s (~17 min), efficientnet_b0 431-603 s (~7-10 min), all 30 epochs. journal.md (2026-07-19) projects 'grid ~1 week' = 700 runs x 17 min = 198 h.",
+    "work_needed": "That projection uses the 250-patient per-run time and does NOT apply the 3.36x data scaling. Scaled: ~57 min/run for densenet-class, ~25-34 min for efficientnet-class, giving roughly 28 days for 700 densenet-class runs — and SPEC 2.4 adds convnext_tiny, inception_v3, swin_tiny, maxvit_tiny, none of which has ever been timed here. If the epoch cap is raised, multiply again. Re-derive before sizing the grid.",
+    "blocking_for": "the researcher's grid-sizing decision"
+   },
+   {
+    "name": "Peak-VRAM instrumentation",
+    "state": "stub_or_partial",
+    "evidence": "src/train.py:181 records ONLY `torch.cuda.max_memory_allocated()/1e9`. Values in every history JSON: densenet121 0.851-0.853 GB, efficientnet_b0 0.583 GB. grep for max_memory_reserved / nvidia-smi across src/ and scripts/ returns nothing.",
+    "work_needed": "max_memory_allocated is allocator-tracked tensor bytes only — it excludes the caching allocator's reserved pool, the CUDA context, and cuDNN workspaces. The real process footprint is unmeasured. Add `torch.cuda.max_memory_reserved()` to the same JSON (one line) — cost is zero and it makes every future run self-documenting.",
+    "blocking_for": "any claim of VRAM headroom"
+   },
+   {
+    "name": "Actual free VRAM on this machine",
+    "state": "exists_and_ran",
+    "evidence": "Ran nvidia-smi: 'NVIDIA GeForce RTX 4060 Ti, 8188 MiB, 4487 MiB used, 60%'. nvidia-smi --query-compute-apps lists dwm.exe, explorer.exe, three msedgewebview2.exe, msedge.exe, Claude desktop, WhatsApp, WindowsTerminal — desktop graphics contexts, not a training job.",
+    "work_needed": "State plainly: headroom is NOT 8 GB - 0.85 GB. With the researcher's normal desktop loaded, ~3.7 GB is free. Any batch-size escalation must be validated against that, not against the card's nameplate.",
+    "blocking_for": "the 'is there headroom to speed things up' question"
+   },
+   {
+    "name": "VRAM at any batch size other than 8",
+    "state": "absent",
+    "evidence": "config.yaml:117-118 batch_size 8 / grad_accum_steps 4; every history JSON in outputs/ comes from that setting. No run at any other batch size exists.",
+    "work_needed": "NOT VERIFIED. Activations dominate, so batch 8 -> 32 is roughly 4x activation memory (~3 GB allocated for densenet121) plus weights/optimizer — plausible on an idle 8 GB card, marginal alongside the measured 4.5 GB desktop usage. That is arithmetic, not a measurement. Settle it with one smoke run: `--max-epochs 1` densenet121 at batch 32 / accum 1, reading max_memory_reserved.",
+    "blocking_for": "any speed-up via batch size"
+   },
+   {
+    "name": "Methodology status of a batch-size change",
+    "state": "not_verified",
+    "evidence": "DECISIONS D22(vii) admits channels_last and persistent_workers as 'performance-only' precisely because they change 'memory layout and worker persistence only'. Batch size is not in that class: both densenet121 and efficientnet_b0 are BatchNorm networks, so batch 8 -> 32 changes the BN batch statistics and therefore the trained model, even if effective batch 32 is preserved by dropping accum to 1.",
+    "work_needed": "Do NOT fold a batch-size change in under the D22(vii) precedent. It either requires re-running the 20 canonical runs under the new setting, or a fresh pre-registered amendment declared before measuring. The 9.1x speed-up D22(vii) already harvested was the method-neutral one; no comparable neutral lever is in evidence.",
+    "blocking_for": "D22 immutability; comparability of subset runs with grid runs"
+   },
+   {
+    "name": "src/evaluate.py",
+    "state": "stub_or_partial",
+    "evidence": "src/evaluate.py:12 `raise NotImplementedError(\"STAGE 6 — implement after training (SPEC §6.6).\")`; 16 lines total.",
+    "work_needed": "Patient-level aggregation (D7 / config evaluate.aggregation) has never been computed; confusion matrices and per-class tables (SPEC I1, I3) do not exist. Note src/stats.py is NO LONGER a stub (218 lines, implemented 2026-07-20, produced outputs/results/stats_nodule.json) — STATUS.md line 102 still claims both are stubs and is stale on stats.py.",
+    "blocking_for": "MAJOR REVIEW items I1, I3, and the patient aggregation level"
+   },
+   {
+    "name": "src/ensemble.py, src/figures.py, src/mechanism.py",
+    "state": "absent",
+    "evidence": "src/ensemble.py:11 and src/figures.py:11 both `raise NotImplementedError` (15 and 16 lines). `ls src/mechanism.py` -> No such file. SPEC §6.8 names mechanism.py as stage 8.",
+    "work_needed": "Grad-CAM/SHAP + quantified bleed (SPEC B10), soft-voting ensemble, ROC/forest/curve figures all have zero implementation. verify_config_contract.py's own output lists mechanism and ensemble keys among the 16 'deferred'.",
+    "blocking_for": "MAJOR REVIEW B10, I7 ensemble axis, I1/I2 figures"
+   },
+   {
+    "name": "run_is_valid config-staleness guard (D25)",
+    "state": "absent",
+    "evidence": "grep for config_hash / cfg_hash across scripts/run_is_valid.py and src/train.py returns nothing. run_is_valid.py:1-18 documents content checks only (loads, finite, in-range, len match).",
+    "work_needed": "Still open exactly as STATUS.md line 92-96 describes. It already bit the project once (10 pre-amendment EfficientNet models passed and were manually purged). At ~700 grid runs, manual purging is not a control. Stamp the config hash into each run's history and reject a mismatch.",
+    "blocking_for": "grid integrity; especially if max_epochs changes mid-grid"
+   },
+   {
+    "name": "CLAHE enhancement arm preprocessing (SPEC 2.6b ablation)",
+    "state": "stub_or_partial",
+    "evidence": "outputs/processed/lidc_clahe contains 6 entries vs 641 in lidc_none. config.yaml:81 declares enhancement: [none, clahe] as an ablation factor.",
+    "work_needed": "Effectively unpreprocessed. If the enhancement ablation is in the grid, it doubles both the preprocessing job (to ~17.3 GB on disk) and the run count. Not currently counted in the ~700-run SPEC budget.",
+    "blocking_for": "MAJOR REVIEW I12"
+   },
+   {
+    "name": "Config-code contract gate (D27/D28)",
+    "state": "exists_and_ran",
+    "evidence": "Ran scripts/verify_config_contract.py: exit 0, 'config.yaml and the code agree on every key'; it lists deferred keys explicitly (stats.within_arm McNemar not implemented, S1/S3 sizing). requirements.txt:31-33 now has torch==2.3.1+cu121 / torchvision==0.18.1+cu121 / timm==1.0.28 uncommented and scikit-learn pinned to the installed 1.3.2. Wired as GATE 1 in run_grid.ps1:74-84.",
+    "work_needed": "none — this machinery works and will catch a max_epochs change that is made in code but not in config (or vice versa)",
+    "blocking_for": "none; it is the safeguard that makes an epoch-budget amendment auditable"
+   }
+  ]
+ },
+ {
+  "summary": "What exists and ran: the S2/slice/patient-vs-random paired contrast at 250-patient scale — 20 canonical + 20 probe runs with saved probabilities, 30 split CSVs, dataset accounting, leakage quantification, checkpoint-fidelity repair (now 20/20 compliant), fold-balance and stratification evidence, and a real `src/stats.py` (Wilcoxon, Nadeau–Bengio, cluster bootstrap) plus a config↔code contract gate that passes. That is roughly one cell of the reviewer contract: of the 30 rows in SPEC §5, I count 3 closed by an artifact on disk (B8 probs, I4 accounting, and the split-index files for B7 minus the \"committed\" part), ~11 partial, and ~16 open with nothing at all. Everything the grid alone can close is quantitative repetition (B2/I14 repeats, B5 power, B1 gap±CI at full cohort, I7 transformers, B11 granularity/dataset persistence); it cannot close the components that have no code: McNemar, confusion matrices, ROC/figures, per-model metric tables with F1, patient-level aggregation, Grad-CAM/SHAP, the CLAHE ablation runs, an augmentation on/off arm, S1 (LNDb) and S3 (end-to-end + segmentation), the whole manuscript, and `git init`. Two live integrity items: `outputs/metrics/canonical_gap_*.txt` are stale (written 2026-07-19 22:35, before the remediated models of 2026-07-20 16:15/16:24), and `scripts/04_run_all_training.sh` — the script SPEC §9.1 says reproduces `outputs/results/` — crashes on `--arm nodule`, an invalid choice.",
+  "components": [
+   {
+    "name": "B1 (R1.1/R3/R4) paired A-vs-B experiment, only split changes",
+    "state": "stub_or_partial",
+    "evidence": "src/splits.py:46-108 builds both arms + asserts leakage; 40 files in outputs/probs/ all named lidc_binary_slice_{patient,random}_rep0_fold0-4_{densenet121,efficientnet_b0}_none_seed42(.|_final); gap tables in outputs/metrics/audit_controls_POST.txt (SLICE AUC densenet +0.0717, effnet +0.1142, 5/5 folds). SPEC §5 names the artifact `outputs/results/gap_*.csv` — `ls outputs/results/` returns only stats_nodule.json.",
+    "work_needed": "Full-cohort, multi-repeat re-run; emit the SPEC-named outputs/results/gap_*.csv from archived probs; regenerate the stale outputs/metrics/canonical_gap_*.txt (mtime 2026-07-19 22:35 predates the remediated models of 2026-07-20 16:15/16:24) or delete them so no stale number can be quoted.",
+    "blocking_for": "B1, the paper's headline"
+   },
+   {
+    "name": "B2 / I14 (R1.2/R3) repeats AND GroupKFold (seeds parameterize repeats)",
+    "state": "stub_or_partial",
+    "evidence": "All 30 files in outputs/splits/ carry `rep0`; `ls outputs/splits | grep -c rep1` = 0. config.yaml:104 declares S2 repeats:3 folds:5 (n=15); config_contract.py:77-78 marks repetition.per_setting.* as 'deferred'. Grouped 5-fold itself exists and ran.",
+    "work_needed": "Generate rep1/rep2 splits (seeds 123, 2024 — splits.py already loops `for r in range(repeats)`) and train them. This is pure grid work, no new code.",
+    "blocking_for": "B2, I14, and the n>=10 that D5 says Wilcoxon needs"
+   },
+   {
+    "name": "B3 (R3/R4.1) AUC-ROC reported",
+    "state": "stub_or_partial",
+    "evidence": "AUC is computed in src/train.py:76, scripts/analyze_gap.py, scripts/audit_controls.py:85, and src/stats.py CLI (outputs/results/stats_nodule.json has AUC + CI per arch/arm). No ROC curve exists: `find outputs -name '*.png'` returns only history/curves_validation_run.png and metadata/qc_stage2.png; src/figures.py:11 raises NotImplementedError.",
+    "work_needed": "Implement src/figures.py ROC panel from outputs/probs/*.npz. Grid does not close this.",
+    "blocking_for": "B3, R4.1"
+   },
+   {
+    "name": "B4 (R1.3/R3) bootstrap 95% CI per metric",
+    "state": "stub_or_partial",
+    "evidence": "src/stats.py:125-164 `bootstrap_ci` with patient-cluster resampling (implemented 2026-07-20, previously nonexistent); produced outputs/results/stats_nodule.json (n_boot=2000, clustered=true, densenet patient AUC 0.9312 [0.9075,0.9524]). Only the nodule level exists — no stats_slice.json, and slice is the pre-registered PRIMARY level (D17/D26).",
+    "work_needed": "Run `python -m src.stats --level slice`; add the per-run metric table CIs that src/evaluate.py was supposed to produce.",
+    "blocking_for": "B4, I3"
+   },
+   {
+    "name": "B5 (R1.3/R2/R3/R4.1) significance tests — Wilcoxon exists, McNemar does not",
+    "state": "stub_or_partial",
+    "evidence": "Wilcoxon: src/stats.py:103-121, invoked at scripts/audit_controls.py:176; every reported p is 0.0625 = the exact floor at n=5 (`min_attainable_p`, `at_floor`). McNemar: `grep -ril mcnemar src/ scripts/` matches only src/config_contract.py:116 ('McNemar not implemented') and the comment in scripts/06_run_stats.sh.",
+    "work_needed": "Grid raises n so Wilcoxon can leave the floor. McNemar must be WRITTEN (within-arm, same test set) — the grid cannot produce it. Also still-open per STATUS: permutation vs DeLong for within-arm AUC.",
+    "blocking_for": "B5, R4.1, I7 arch-vs-arch comparison"
+   },
+   {
+    "name": "B6 (R1.7/R3/R4.2) independent patient-level test set for S3",
+    "state": "absent",
+    "evidence": "`grep -ril 'end2end|segmentation' src/ scripts/` returns nothing. config.yaml:62 declares S3 lidc_end2end; config_contract.py has no S3 code path beyond 'deferred' entries.",
+    "work_needed": "Entire S3 pipeline (lung seg -> nodule seg -> ROI -> classify) plus a held-out patient cohort touched once. Separate work, not grid.",
+    "blocking_for": "B6, I5, B11 (dataset persistence)"
+   },
+   {
+    "name": "B7 (R3) executable partition indices committed",
+    "state": "stub_or_partial",
+    "evidence": "30 CSVs in outputs/splits/ (train/val/test x 5 folds x 2 arms, slice/rep0) — the indices exist and .gitignore explicitly whitelists them. But `ls -a E:\\NODULES | grep -i git` returns only `.gitignore`: there is no .git directory, so nothing is committed and no history exists.",
+    "work_needed": "`git init` + commit the validated state (STATUS lists this as required before submission).",
+    "blocking_for": "B7, the reproducibility statement"
+   },
+   {
+    "name": "B8 (R3/R4.1) probabilistic predictions preserved",
+    "state": "exists_and_ran",
+    "evidence": "40 .npz in outputs/probs/ (20 canonical + 20 `_final` probe), y_true+y_prob; scripts/audit_controls.py:71-75 re-derives the headline FROM those archives and hard-fails on misalignment/label mismatch; C1 provenance check agreed with fp32 re-inference to ~0.001.",
+    "work_needed": "none for the runs that exist; the grid must keep the same discipline.",
+    "blocking_for": "B8 — closed"
+   },
+   {
+    "name": "B9 (R3) numeric-consistency gate (F1 = 2PR/(P+R), labels match)",
+    "state": "absent",
+    "evidence": "No F1/precision/recall anywhere: src/evaluate.py:12 raises NotImplementedError (verified by running `python -m src.evaluate`). A live inconsistency exists today: outputs/metrics/canonical_gap_densenet121.txt (2026-07-19 22:35:29) reports +0.0386 from models superseded by the 2026-07-20 16:15/16:24 remediation, while audit_controls_POST.txt reports +0.0379.",
+    "work_needed": "Implement evaluate.py with the assertion; purge/regenerate stale metric files. Not closable by the grid.",
+    "blocking_for": "B9, I3, R3 integrity"
+   },
+   {
+    "name": "I1 (R4.6) confusion matrices",
+    "state": "absent",
+    "evidence": "`grep -rin confusion src/ scripts/` matches only docstrings in src/evaluate.py:6 and src/figures.py:4, both stubs.",
+    "work_needed": "Implement in evaluate.py/figures.py from saved probs at the declared threshold (config ensemble.threshold 0.5).",
+    "blocking_for": "I1"
+   },
+   {
+    "name": "I2 (R4.5) train/val curves as overfitting evidence",
+    "state": "stub_or_partial",
+    "evidence": "Every run's history JSON carries 30 epoch records (epoch, train_loss, val_loss, val_auc, lr) — verified by loading outputs/history/lidc_binary_slice_patient_rep0_fold0_densenet121_none_seed42.json ('history list len 30'). The only curve figure, outputs/history/curves_validation_run.png (2026-07-17 14:33), predates the canonical runs and came from the 50-patient validation stage.",
+    "work_needed": "Plot curves for the canonical/grid runs (figures.py). Data is already there.",
+    "blocking_for": "I2, R4.5"
+   },
+   {
+    "name": "I3 (R3) complete per-model metrics table",
+    "state": "stub_or_partial",
+    "evidence": "Per-run test metrics exist but are only {auc, acc, loss} (history JSON `test` dict). No precision/recall/F1/specificity/per-class table anywhere; src/evaluate.py is a stub; outputs/metrics/ contains only audit/gap text+json.",
+    "work_needed": "Implement evaluate.py -> outputs/metrics/*.csv full tables per model/arm/fold/level.",
+    "blocking_for": "I3, B9"
+   },
+   {
+    "name": "I4 (R2/R3/R4) dataset detail: annotation-vs-nodule counting, grouping, construction",
+    "state": "exists_and_ran",
+    "evidence": "outputs/metadata/dataset_accounting.md + .json: 1018 scans/1010 patients, 6859 annotations, 2651 clustered nodules, 1695 labelled, 956 ambiguous excluded, 14 over-merge flagged (9 mal/4 amb/1 ben), principal cohort 11026 slices/1695 nodules/740 patients, sensitivity >=3 cohort alongside. Built by src/metadata.py.",
+    "work_needed": "none computationally — it must be written into Methods.",
+    "blocking_for": "I4 — artifact closed, writing open"
+   },
+   {
+    "name": "I5 (R3/R4) segmentation models, training data, seg accuracy, error propagation",
+    "state": "absent",
+    "evidence": "No segmentation code (`grep -ril segmentation src/ scripts/` empty). The ROI in src/preprocess.py:7 is a pylidc consensus mask (clevel=0.5) — a radiologist-consensus crop, NOT a trained segmenter, so there is no seg accuracy to report and no error to propagate.",
+    "work_needed": "Either build S3's segmentation stage and measure it, or reframe the paper as classification-only and state that explicitly (a scope decision, not a compute decision).",
+    "blocking_for": "I5, B6, S3"
+   },
+   {
+    "name": "I6 / I13 (R1.8/R3) confounders + class-balance neutralisation",
+    "state": "stub_or_partial",
+    "evidence": "Supporting measurements exist: outputs/metrics/fold_balance.txt (per-fold prevalence, drift, spearman gap-vs-prevalence), stratification_projection.json/.txt + balanced_splitter_projection.json (D28: prevalence SD 0.0563->0.0038 moves metric SD only 1-7%), slice ~50/50 vs nodule ~32/68 in dataset_accounting.md. Aggregation covers slice+nodule only — PATIENT level has never been computed (src/config_contract.py:111 marks evaluate.aggregation 'deferred').",
+    "work_needed": "Implement patient-level aggregation (D7 promises three levels); write the Discussion. Grid does not close either.",
+    "blocking_for": "I6, I13, D7"
+   },
+   {
+    "name": "I7 (R1.5/R2) transformer / hybrid SOTA baseline",
+    "state": "exists_untested",
+    "evidence": "src/models.py:19-20 maps swin_tiny and maxvit_tiny_tf_224 to timm ids and models.py:32 handles their 224 input; no run exists — every file in outputs/probs, models, history is densenet121 or efficientnet_b0. scripts/run_grid.ps1:34 defaults to those two archs only. config_contract.py:106 marks architectures.sota 'deferred'.",
+    "work_needed": "Add to the grid arch list and validate one run (VRAM/input-size path never exercised on 8 GB).",
+    "blocking_for": "I7, R1.5, R2"
+   },
+   {
+    "name": "I8 (R2) expanded ablation: split unit x arch x augmentation on/off",
+    "state": "absent",
+    "evidence": "There is no augmentation switch: src/train.py:110 constructs the train dataset as `LidcDataset(..., augment=True)` unconditionally, and train.py's argparse (lines 82-94) has no --augment flag. config.yaml augment.* keys set the parameters, never on/off.",
+    "work_needed": "Add a CLI/config toggle plus runs. Small code change, but it does not exist today; also note D22 warns augmentation-off is a mechanism probe, not a headline.",
+    "blocking_for": "I8, R2"
+   },
+   {
+    "name": "I12 (R1.4) enhancement ablation none vs CLAHE as a controlled experiment",
+    "state": "stub_or_partial",
+    "evidence": "Code exists: src/preprocess.py:10,32 (equalize_adapthist), --enhancement CLI. Data does not: `find outputs/processed/lidc_clahe -name '*.npy'` = 67 files (3 QC scans) vs 3699 for 'none'; processed_index_clahe.csv has 67 rows. Zero clahe splits, zero clahe runs; scripts/run_grid.ps1:123-126 never passes --enhancement.",
+    "work_needed": "Preprocess the cohort under clahe (roughly doubles preprocessing time), extend run_grid.ps1 with an -Enhancement parameter, then run the paired arms again under clahe.",
+    "blocking_for": "I12, R1.4, O1"
+   },
+   {
+    "name": "B10 (R3) leakage MECHANISM — bleed quantified, attribution absent",
+    "state": "stub_or_partial",
+    "evidence": "Bleed IS measured: outputs/metrics/leakage_assertion.txt — patient arm 0 patient/nodule/row overlap in 5/5 folds; random arm 194-204 shared patients, 328-348 shared nodules, 0 identical rows, 98.9-99.8% of test rows from a train patient. Attribution is absent: `grep -ril 'gradcam|grad_cam' src/ scripts/` returns no real hit (only the word 'shape'); config_contract.py:117-118 marks mechanism.* 'deferred'.",
+    "work_needed": "Write the Grad-CAM/SHAP stage (SPEC §2.6a). Also D8's two-level decomposition needs sample_unit=nodule TRAINING runs, which do not exist (see B11).",
+    "blocking_for": "B10, D8, R3 'why not only how much'"
+   },
+   {
+    "name": "B11 (R1.1/R3) gap persists across granularity AND dataset (full 2x2 on S1/S2/S3)",
+    "state": "absent",
+    "evidence": "`ls outputs/splits | grep -c nodule` = 0 — every split is sample_unit=slice; scripts/run_grid.ps1:125 hardcodes `--sample-unit slice`. The 'nodule' numbers reported so far are post-hoc aggregation of slice-trained models (scripts/audit_controls.py:89 by_nodule), NOT the sample_unit=nodule arm SPEC §2.1 requires. S1 (LNDb) and S3 have no code at all.",
+    "work_needed": "Generate nodule-unit splits (src/splits.py:48-49 already supports it via is_representative_slice, present in lidc_master.csv header) and train that half of the 2x2; S1/S3 are separate builds. This is the single largest grid-sizing decision.",
+    "blocking_for": "B11, D8, the 'not a slice artefact' rebuttal"
+   },
+   {
+    "name": "I9/I10/I11 (R2) abstract, introduction, figures with formulas",
+    "state": "absent",
+    "evidence": "paper/manuscript.tex is a 15-line placeholder whose body is a TODO comment; paper/figures/ is empty (`ls paper/figures` -> nothing).",
+    "work_needed": "Writing, after the numbers are final. No grid dependency beyond having the numbers.",
+    "blocking_for": "I9, I10, I11"
+   },
+   {
+    "name": "O1/O2/O3 (R1.4/R2/R4.7) reviewer-suggested references",
+    "state": "absent",
+    "evidence": "paper/response_to_reviewers.md:44-48,71-75,120 are template placeholders ('[Cite suggested DOIs only if genuinely relevant]'). No bibliography file exists in paper/.",
+    "work_needed": "Editorial judgement + a reference-existence audit (SPEC §8 notes three hallucinated citations were previously found). Pure writing.",
+    "blocking_for": "O1, O2, O3"
+   },
+   {
+    "name": "O4 (R1.6) external clinical validation / O5 (R4.3) 2D-vs-3D",
+    "state": "absent",
+    "evidence": "Only template text in paper/response_to_reviewers.md:53-56,114-115; no Limitations section exists (manuscript.tex is a placeholder).",
+    "work_needed": "Discussion/Limitations text. Explicitly out of experimental scope — do not size the grid for these.",
+    "blocking_for": "O4, O5"
+   },
+   {
+    "name": "Full-cohort preprocessing (prerequisite for every grid claim)",
+    "state": "stub_or_partial",
+    "evidence": "Ran `python scripts/verify_coverage.py --phase grid`: 'FULL cohort: 7328 slices without .npy ... COVERAGE GATE: FAILED - DO NOT TRAIN'. `--phase subset` PASSES (3284 in-use slices / 565 nodules / 250 patients, 0 missing). find counts 3699 .npy under outputs/processed/lidc_none of 11026 cohort slices (33.5%).",
+    "work_needed": "Preprocess the remaining 7328 slices (490 more patients) before any `-Phase grid` launch; the gate will refuse otherwise, by design (D23).",
+    "blocking_for": "every grid run; B1/B2/B11 at full scale"
+   },
+   {
+    "name": "src/evaluate.py (SPEC stage 6)",
+    "state": "stub_or_partial",
+    "evidence": "Ran `python -m src.evaluate` -> NotImplementedError at src/evaluate.py:12. Docstring promises accuracy/precision/recall/F1 with the F1 identity assertion, AUC, bootstrap CI, confusion matrices, per-class tables.",
+    "work_needed": "Implement. It is the single module behind B3(figure inputs), B9, I1, I3 and patient-level aggregation.",
+    "blocking_for": "B9, I1, I3, I13"
+   },
+   {
+    "name": "src/ensemble.py (D20 soft-voting)",
+    "state": "stub_or_partial",
+    "evidence": "Ran `python -m src.ensemble` -> NotImplementedError at src/ensemble.py:11. config_contract.py:107-110 marks ensemble.members/method/sensitivity 'deferred' (only ensemble.threshold is consumed — src/train.py:192 uses it as the accuracy threshold).",
+    "work_needed": "Implement soft-voting over saved probs; needs >=3 architectures trained per cell, which is a grid-sizing input.",
+    "blocking_for": "D20, I8, R1.5"
+   },
+   {
+    "name": "src/figures.py (SPEC stage 8)",
+    "state": "stub_or_partial",
+    "evidence": "Ran `python -m src.figures` -> NotImplementedError at src/figures.py:11. Only two PNGs exist in outputs/ and neither is a result figure.",
+    "work_needed": "Implement ROC, confusion matrices, train/val curves, forest/gap plot from outputs/results/.",
+    "blocking_for": "B3, I1, I2, I11"
+   },
+   {
+    "name": "scripts/04_run_all_training.sh (the SPEC §9.1 reproducibility path)",
+    "state": "stub_or_partial",
+    "evidence": "scripts/04_run_all_training.sh:7 sets ARMS=(patient nodule); `python -m src.train --arm nodule` errors: \"argument --arm: invalid choice: 'nodule' (choose from 'patient','random')\". It also loops resnet50/swin_tiny, which have never run. So `bash scripts/*` cannot reproduce outputs/.",
+    "work_needed": "Rewrite 04/05/07 to match the real drivers (run_grid.ps1 / analyze_gap / audit_controls) or delete them. SPEC §9.1 defines done as a fresh clone reproducing outputs/results via scripts/.",
+    "blocking_for": "SPEC §9.1 reproducibility gate, R3"
+   },
+   {
+    "name": "scripts/run_grid.ps1 coverage of the grid axes",
+    "state": "stub_or_partial",
+    "evidence": "run_grid.ps1:123-126 hardcodes `--sample-unit slice`, `--rep 0`, no --enhancement, and the run tag at line 68 is fixed to `lidc_binary_slice_..._rep0_...`. Parameters exposed: Archs, Arms, Folds, MaxEpochs, Patience, Seed only. Default -Patience 30 (line 39) is precisely what produced the 2/20 checkpoint deviation that had to be remediated.",
+    "work_needed": "Parameterize rep, sample_unit and enhancement before the grid, and decide the patience/probe protocol so the deviation does not recur at ~10% of hundreds of runs.",
+    "blocking_for": "B2, B11, I12, checkpoint fidelity at scale"
+   },
+   {
+    "name": "Config-hash stamp in run artifacts (D25 config-staleness)",
+    "state": "absent",
+    "evidence": "Loaded a history JSON: keys are ['tag','arch','checkpoint','kind','best_epoch','early_stop_would_fire_at','epochs_run','history','test','peak_vram_gb'] — no config hash. scripts/run_is_valid.py validates content only. DECISIONS D25(iv) calls the stamp 'REQUIRED before the full grid (not optional)'.",
+    "work_needed": "Stamp a hash of the canonical keys into history.json and make run_is_valid reject mismatches; otherwise config changes require manual purges at grid scale.",
+    "blocking_for": "grid integrity (D25), R3"
+   },
+   {
+    "name": "Config-code contract gate (D27)",
+    "state": "exists_and_ran",
+    "evidence": "Ran `python scripts/verify_config_contract.py` -> exit 0, 'OK - config.yaml and the code agree on every key', with 16 keys explicitly listed as 'deferred (NOT implemented - never describe as done in the manuscript)'. src/config_contract.py:137 assert_contract raises; wired into src/train.py:100 before GPU use and as GATE 1 of run_grid.ps1:75-84.",
+    "work_needed": "none; keep the deferred list synchronized as stages land.",
+    "blocking_for": "D27 — closed; it is also the honest source for what is NOT implemented"
+   },
+   {
+    "name": "Checkpoint-protocol fidelity (D22 canonical selection)",
+    "state": "exists_and_ran",
+    "evidence": "Ran-artifact outputs/metrics/checkpoint_fidelity.txt: all 20 rows 'match', 'OK - every canonical checkpoint equals the early-stopped selection'; produced by scripts/check_checkpoint_fidelity.py after scripts/remediate_checkpoints.ps1 (backups in outputs/_pre_remediation/20260720-155734/).",
+    "work_needed": "none for the 20; the check must be re-run on every grid batch (see run_grid.ps1 -Patience note).",
+    "blocking_for": "validity of the canonical number"
+   },
+   {
+    "name": "Anti-leakage gate (SPEC §6 mandatory gate)",
+    "state": "exists_and_ran",
+    "evidence": "src/splits.py:101-108 asserts disjoint patient_id in the patient arm and non-disjoint in the random arm; outputs/metrics/leakage_assertion.txt records 0 overlap in 5/5 patient folds and 98.9-99.8% row-level patient bleed in the random arm.",
+    "work_needed": "none; re-assert on grid splits.",
+    "blocking_for": "SPEC §6 leakage gate — closed"
+   },
+   {
+    "name": "LNDb (S1) data and loader",
+    "state": "stub_or_partial",
+    "evidence": "E:\\NODULES\\LNDB holds data0-5.rar (~24 GB), masks.rar and the CSVs — still archived, not extracted. `grep -ril lndb src/ scripts/` matches only src/config_contract.py:34 ('LNDb (setting S3) not implemented').",
+    "work_needed": "Extract, write an LNDb metadata/preprocess path and a multiclass head. A separate build stage, comparable in size to the LIDC one.",
+    "blocking_for": "S1, B11 dataset generalization, H2"
+   },
+   {
+    "name": "Measured wall-time baseline for grid sizing",
+    "state": "exists_and_ran",
+    "evidence": "outputs/logs/grid_20260719-165744.log: densenet121 runs 982-1105 s each, efficientnet_b0 runs 431-603 s each, on the 250-patient subset (3284 in-use slices). 20 runs took ~17:00-21:00 on 2026-07-19.",
+    "work_needed": "Treat as a lower bound: the full cohort is 11026 slices (~3.4x the data), and both new axes (sample_unit=nodule, clahe) multiply run count. No timing has ever been measured on full-cohort data or on swin/maxvit.",
+    "blocking_for": "honest grid sizing"
+   },
+   {
+    "name": "git repository / commit history",
+    "state": "absent",
+    "evidence": "`ls -a E:\\NODULES | grep -i git` -> only `.gitignore`; there is no .git directory. STATUS.md:118-122 lists `git init` + milestone commits as required before scaling and before submission.",
+    "work_needed": "git init, commit the validated 20-run state before the grid so the grid is diffable against it.",
+    "blocking_for": "B7, reproducibility statement, R3"
+   }
+  ]
+ },
+ {
+  "components": [
+   {
+    "name": "Per-epoch learning-curve DATA (train_loss, val_loss, val_auc, lr)",
+    "state": "exists_and_ran",
+    "evidence": "src/train.py:155-156 appends {epoch,train_loss,val_loss,val_auc,lr} each epoch; persisted at src/train.py:197-201 into outputs/history/<run>.json. Verified on disk: 40 JSONs in outputs/history/, all 40 have exactly keys {epoch,train_loss,val_loss,val_auc,lr}, 39 with 30 epochs and 1 with 26, zero NaN val_auc (ran: python -c over glob outputs/history/*.json with the nodules env).",
+    "work_needed": "none for the DATA. Caveat: only train_LOSS is recorded on the train side — there is no train_auc/train accuracy, so a 'train vs val AUC' overfitting panel cannot be drawn from existing artifacts (only train-loss vs val-loss, plus val-auc). If the reviewers' R4.5 figure is meant to show train-vs-val on the SAME metric, add a train-set eval pass per epoch (or accept loss-only). Also: the CANONICAL and _final JSONs of one run duplicate the same history array (one training pass, two checkpoints), so there are 20 unique curve sets, not 40.",
+    "blocking_for": "R4.5 train/val learning curves (SPEC.md:395 maps I2 -> R4.5 to 'outputs/history/*; curve figures')"
+   },
+   {
+    "name": "Confusion matrix — computed or persisted anywhere",
+    "state": "absent",
+    "evidence": "grep -rn \"confusion_matrix|sensitivity|specificity|recall|precision|f1_score|classification_report\" --include=*.py over the whole repo returns NO hit in any executable path — only docstrings (src/evaluate.py:4, src/figures.py:4) and a metadata key named min_annotators_sensitivity (src/metadata.py:352). sklearn imports in real code are only roc_auc_score/log_loss/brier_score_loss/accuracy_score (src/train.py:24, scripts/analyze_gap.py:31, scripts/audit_controls.py:37, src/stats.py:177). No TP/FP/TN/FN counts exist in any outputs/ file.",
+    "work_needed": "Implement it. The only thresholded quantity that exists today is scalar accuracy at 0.5 (src/train.py:192, threshold read from cfg['ensemble']['threshold']), stored as test.acc in the history JSON — a single number from which no 2x2 table can be recovered. Minimum add: compute and persist tn/fp/fn/tp (plus derived sens/spec/PPV/NPV/F1) per run, per aggregation level (slice AND nodule), for both arms, at the declared threshold — and decide/declare whether the threshold is fixed 0.5 or val-tuned.",
+    "blocking_for": "R4.6 confusion matrices (SPEC.md:394 maps I1 -> R4.6 to 'figures.py; per model/setting')"
+   },
+   {
+    "name": "src/evaluate.py — STAGE 6 (metrics, per-class tables, bootstrap CI per metric, confusion matrices)",
+    "state": "stub_or_partial",
+    "evidence": "src/evaluate.py is 16 lines; src/evaluate.py:12 `raise NotImplementedError(\"STAGE 6 — implement after training (SPEC §6.6).\")`. Ran it: `python -m src.evaluate --config config.yaml` -> NotImplementedError. Its own docstring (src/evaluate.py:4-6) promises exactly the confusion matrices and per-class tables the reviewers asked for.",
+    "work_needed": "Write the module, or delete it and move the responsibility elsewhere. It is the SPEC-named home for the confusion matrix (SPEC.md:292, SPEC.md:451). Note scripts/05_evaluate_all.sh:4 invokes it, so that shell stage currently aborts.",
+    "blocking_for": "R4.6; also the per-model complete metric tables (I3)"
+   },
+   {
+    "name": "src/figures.py — STAGE 8 (ROC, confusion matrices, train/val curves, forest/gap plot)",
+    "state": "stub_or_partial",
+    "evidence": "src/figures.py is 15 lines; src/figures.py:11 `raise NotImplementedError(\"STAGE 8 — implement after stats (SPEC §6.8).\")`. Ran it: `python -m src.figures --config config.yaml` -> NotImplementedError. scripts/07_make_figures.sh:5 calls it, so that stage aborts too.",
+    "work_needed": "Implement from scratch. This is the ONLY declared figure entry point in the repo and it has never produced anything.",
+    "blocking_for": "R4.5 and R4.6 as FIGURES (SPEC.md:394-395 point both items at figures.py)"
+   },
+   {
+    "name": "Any figure/plotting code at all in the repo",
+    "state": "absent",
+    "evidence": "grep -rn \"matplotlib|pyplot|savefig\" over --include=*.py --include=*.ps1 --include=*.sh --include=*.md --include=*.yaml (excluding outputs/) returns exactly ONE hit: requirements.txt:23. No .py file in src/ or scripts/ imports matplotlib. src/figures.py contains no plotting call, only the stub raise.",
+    "work_needed": "All plotting must be written de novo. matplotlib IS available and importable — verified: `C:\\ProgramData\\miniconda3\\envs\\nodules\\python.exe -c \"import matplotlib\"` -> 3.10.9 at envs/nodules/lib/site-packages (requirements.txt:23, environment.yml:18). So the dependency is not the blocker; the absence of code is.",
+    "blocking_for": "every figure the review demands"
+   },
+   {
+    "name": "outputs/figures (or equivalent figure output dir) — has anything ever been written?",
+    "state": "absent",
+    "evidence": "`ls outputs/` -> _pre_remediation, history, logs, metadata, metrics, models, probs, processed, results, splits. There is NO outputs/figures. paper/figures/ EXISTS but is EMPTY (ls -la paper/figures -> 0 entries, dir created 2026-07-17 and untouched since). src/train.py:184 creates only ('probs','history','models','metrics').",
+    "work_needed": "Create the directory convention and a naming scheme keyed to the run tag, so grid runs do not collide."
+   },
+   {
+    "name": "Orphan PNGs already on disk (2 files)",
+    "state": "not_verified",
+    "evidence": "outputs/history/curves_validation_run.png (57 KB, 2026-07-17 14:33) and outputs/metadata/qc_stage2.png exist. NO code in the repo references either filename (grep over SPEC.md, DECISIONS.md, STATUS.md, journal.md, README.md, CLAUDE.md, src/, scripts/, paper/, config.yaml -> zero hits). journal.md:107 says 'Curves show clear overfitting' for the 2026-07-17 8-epoch validation run and journal.md:69/96 mention a 'QC figure sent' — consistent with ad-hoc, one-off plots from a chat session, not from committed code.",
+    "work_needed": "Treat as unreproducible. They are single-run scratch images from the 50-patient pipeline-validation stage (efficientnet_b0, 8 epochs, TEST AUC 0.767 — journal.md:105-107), NOT from any of the 20 canonical runs. They must not be reused as manuscript figures; the generating code does not exist, which is precisely the code!=manuscript failure the rebuild exists to erase.",
+    "blocking_for": "nothing — but do not let their existence be read as 'we have curves'"
+   },
+   {
+    "name": "Per-run metrics file in outputs/metrics/",
+    "state": "absent",
+    "evidence": "src/train.py:184 creates the outputs/metrics directory but NOTHING in train.py ever writes into it (grep -n 'metrics' src/train.py -> only line 24 the sklearn import and line 184 the makedirs). outputs/metrics/ contains 13 files, all aggregate/audit artifacts written by other scripts (audit_controls.json, canonical_gap_*.txt, checkpoint_fidelity.txt, fold_balance.txt, stratification_projection.*), none per-run.",
+    "work_needed": "Decide the per-run metrics contract and have train.py emit it (the empty makedirs is a latent promise). This is the natural carrier for the confusion matrix counts.",
+    "blocking_for": "I3 complete per-model metric tables; R4.6"
+   },
+   {
+    "name": "outputs/results/ — SPEC-promised gap_*.csv and per-run result tables",
+    "state": "stub_or_partial",
+    "evidence": "outputs/results/ contains exactly ONE file: stats_nodule.json (2977 bytes, 2026-07-20 16:37), written by src/stats.py:209-214. SPEC.md:385 maps B1 to 'outputs/results/gap_*.csv' — no such file exists. scripts/analyze_gap.py persists NOTHING (grep -n 'to_csv|json.dump|savez|open(' scripts/analyze_gap.py -> no write call); the numbers in outputs/metrics/canonical_gap_densenet121.txt / _efficientnet_b0.txt are captured stdout, not a machine-readable artifact.",
+    "work_needed": "Make analyze_gap.py write a structured per-fold table (CSV/JSON) instead of only printing. A figure script cannot build a forest/gap plot from redirected stdout; today it would have to re-run GPU inference to get the numbers back.",
+    "blocking_for": "any real (non-hand-drawn) gap/forest figure"
+   },
+   {
+    "name": "Saved per-sample predictions (basis for any post-hoc confusion matrix)",
+    "state": "exists_and_ran",
+    "evidence": "outputs/probs/ has 40 .npz (20 canonical + 20 _final). Inspected outputs/probs/lidc_binary_slice_patient_rep0_fold0_densenet121_none_seed42.npz -> keys ['y_true','y_prob'], shapes (740,) int64 / (740,) float32. Written atomically at src/train.py:196.",
+    "work_needed": "A SLICE-level confusion matrix is computable today from these files with no re-run. But the npz carry NO identifiers (no nodule_id/patient_id), so nodule- or patient-level CMs depend on positional alignment with outputs/splits/<tag>_test.csv — which holds only because src/datasets.py:34 does an inner merge that preserves left-key order and src/datasets.py:43 hard-fails if any row drops. Recommend adding nodule_id/patient_id arrays to the npz so alignment is explicit rather than an invariant a reader must trust."
+   },
+   {
+    "name": "Nodule-level (and patient-level) aggregation needed to report a CM at the reported unit",
+    "state": "stub_or_partial",
+    "evidence": "Nodule aggregation exists twice: scripts/analyze_gap.py:67 (groupby nodule_id, mean of slice probs, after re-running inference) and scripts/project_stratification.py's to_nodule() as imported by src/stats.py:182,195. PATIENT-level has never been computed — declared deferred in src/config_contract.py:111 ('evaluate.aggregation ... PATIENT level never computed (D7)'), confirmed by running scripts/verify_config_contract.py (lists evaluate.aggregation among 16 deferred keys).",
+    "work_needed": "If the manuscript reports the CM at nodule level (the confirmatory unit), reuse the existing to_nodule path. Patient level would need new code, and D7 promises it."
+   },
+   {
+    "name": "src/stats.py bootstrap_ci — CIs for any CM-derived metric",
+    "state": "exists_and_ran",
+    "evidence": "src/stats.py:125-164 implements a percentile (optionally patient-clustered) bootstrap; src/stats.py:190-214 ran and produced outputs/results/stats_nodule.json (2026-07-20 16:37). No longer a stub.",
+    "work_needed": "none to exist — but it is currently wired only to auc/logloss/brier (src/stats.py:200-202). Sens/spec/PPV/F1 CIs would just be extra metric callables passed to the same function; cheap."
+   },
+   {
+    "name": "scripts/05_evaluate_all.sh and scripts/07_make_figures.sh drivers",
+    "state": "stub_or_partial",
+    "evidence": "scripts/05_evaluate_all.sh:4-5 invoke `python -m src.evaluate` and `python -m src.ensemble`; scripts/07_make_figures.sh:5 invokes `python -m src.figures`. All three targets raise NotImplementedError (src/evaluate.py:12, src/ensemble.py:11, src/figures.py:11 — evaluate and figures executed and confirmed). These shell files are shape without substance.",
+    "work_needed": "They also are NOT wired into scripts/run_grid.ps1 (which runs the 4 gates + src.train only). Whatever per-run emission is added must go INSIDE the train/analyze path or be added as an explicit post-run step in run_grid.ps1 — otherwise the grid will finish and the figures still will not exist."
+   },
+   {
+    "name": "McNemar (the within-arm test that pairs with a confusion matrix)",
+    "state": "absent",
+    "evidence": "src/config_contract.py:116 declares 'stats.within_arm' as ('deferred', 'McNemar not implemented; no within-arm comparison reported yet'); confirmed in the verify_config_contract.py run output. No mcnemar symbol anywhere in src/ or scripts/. config.yaml:179 declares `within_arm: mcnemar`.",
+    "work_needed": "Implement if B5/SPEC.md:389 is to be honoured. Independent of the CM figure, but it consumes the same thresholded predictions, so build both off one persisted contingency table.",
+    "blocking_for": "B5 significance tests (SPEC.md:389), still-open decision (b) in STATUS.md:87"
+   }
+  ],
+  "summary": "On this lens the honest answer is: the DATA for learning curves exists and is complete, the FIGURES do not exist at all, and the confusion matrix does not exist in any form — not as code, not as a number, not as a file. Per-epoch train_loss/val_loss/val_auc/lr are recorded for all 40 history JSONs (src/train.py:155-156, 197-201; verified on disk, 39x30 epochs + 1x26, no NaNs), so R4.5 needs only a plotting script — with the caveat that the train side has loss only, no train_auc. R4.6 is a from-scratch build: grep finds no confusion_matrix / sensitivity / specificity / precision / recall / F1 anywhere in executable code; the only thresholded quantity ever persisted is a scalar accuracy at 0.5 (src/train.py:192). There is ZERO figure-generating code in the repo (one matplotlib mention, in requirements.txt:23 — the library is installed and importable, the code is not written); src/figures.py:11 and src/evaluate.py:12 are NotImplementedError stubs that I executed to confirm, paper/figures/ is empty, outputs/figures does not exist, and the two PNGs on disk (outputs/history/curves_validation_run.png, outputs/metadata/qc_stage2.png) are unreferenced one-offs from the 50-patient July-17 pipeline-validation run, reproducible by no code in the repo. To make the grid emit these per run rather than forcing a re-run later, four things must be added BEFORE launch: (1) persist tn/fp/fn/tp at the declared threshold per run and per aggregation level — outputs/metrics/ is created by train.py:184 and never written to, so it is the obvious carrier; (2) add nodule_id/patient_id to the probs .npz so nodule/patient CMs do not rest on positional alignment; (3) make analyze_gap.py write a structured table instead of only printing (its numbers currently survive only as redirected stdout in outputs/metrics/canonical_gap_*.txt); (4) wire a post-run figure/metrics step into run_grid.ps1, since the 05_/07_ shell drivers call the stubs and are not part of the grid path."
+ },
+ {
+  "components": [
+   {
+    "name": "Full-cohort preprocessing (.npy for 740 patients, enhancement=none)",
+    "state": "stub_or_partial",
+    "evidence": "src/preprocess.py (fully implemented, resumable per (patient,series) via outputs/processed/lidc_none/_rows/*.json). ON DISK: outputs/metadata/processed_index_none.csv = 3699 rows / 288 patients / 640 nodules, all status='ok'; `find outputs/processed/lidc_none -name '*.npy' | wc -l` = 3699 (2.8 GB). TARGET: outputs/metadata/lidc_master.csv = 11026 slices / 740 patients / 1695 nodules / 748 series. => 33.5% of slices, 38.9% of patients. 452 of 740 patients have ZERO processed slices; 543 of 883 annotated pylidc scans never visited (340 _rows JSONs exist).",
+    "work_needed": "Run `python -m src.preprocess --config config.yaml` to completion (single-threaded loop, src/preprocess.py:188). MEASURED cost on 3 unprocessed scans (LIDC-IDRI-0370/0371/0372): cluster_annotations 0.1-0.3 s, scan.to_volume() 7.4-13.0 s cold. Measured per-slice write ~0.25 s (15.2 min of active mtime deltas across the existing 3699 .npy). Estimate: 543 scans x ~11 s (~100 min) + 7328 slices x 0.25 s (~31 min) => ~2.2 h, realistically 2-4 h with I/O variance. Disk: measured 0.78 MB/slice => +5.7 GB (E: has 3.3 TB free). Must be launched by the researcher (Claude-launched processes die with the client).",
+    "blocking_for": "Everything at grid scale: verify_coverage.py --phase grid is GATE 2 of run_grid.ps1 and exits 1 until this is 100%."
+   },
+   {
+    "name": "Coverage gate at grid phase (scripts/verify_coverage.py --phase grid)",
+    "state": "exists_and_ran",
+    "evidence": "Ran it: `python scripts/verify_coverage.py --phase grid` -> \"[gate] cohort IN USE by splits: 3284 slices / 565 nodules / 250 patients -> missing .npy: 0\" ; \"[gate] FULL cohort (grid stage): 11026 slices -> missing .npy: 7328\" ; \"=== COVERAGE GATE: FAILED - DO NOT TRAIN ===\" EXIT=1. Logic at scripts/verify_coverage.py:86-88.",
+    "work_needed": "None - the gate works and correctly refuses. It is a true red, not a bug. It turns green only after full preprocessing.",
+    "blocking_for": "run_grid.ps1 -Phase grid aborts at GATE 2/4 (scripts/run_grid.ps1:93-96)."
+   },
+   {
+    "name": "Splits for repeats>1 and sample_unit=nodule (S2 needs 3 repeats x 5 folds x 2 sample_units)",
+    "state": "exists_untested",
+    "evidence": "CODE EXISTS and works: src/splits.py:46-98 handles --repeats and --sample-unit nodule (line 48-49 filters is_representative_slice); seeds come from cfg.repetition.seed_list (line 56). I ran it in a SANDBOX (scratchpad output root, repo untouched): nodule/patient and nodule/random, 3 repeats x 5 folds on the FULL 740-patient cohort -> 90 CSVs, every fold printed 'leakage-check OK', reps produce genuinely different partitions. ARTIFACTS ABSENT: outputs/splits/ contains exactly 30 files, ALL matching lidc_binary_slice_{patient|random}_rep0_fold{0..4}_{train,val,test}.csv. No rep1, no rep2, no nodule.",
+    "work_needed": "After preprocessing, 4 commands (~1 min total): `python -m src.splits --sample-unit {slice,nodule} --arm {patient,random} --repeats 3 --folds 5` (no --limit-patients, which is what produced the current 250-patient subset). Yields 180 CSVs. Note the current 30 CSVs are the 250-patient SUBSET (3284 slices) and would be OVERWRITTEN by the full-cohort rep0 - archive them first or the canonical 20 runs lose their provenance (run_is_valid.py:80-85 compares len(y_prob) to the test split and would then mark all 20 STALE).",
+    "blocking_for": "repetition.per_setting.S2 = 3x5 = 15 paired points; n>=10 is the whole statistical-power argument (SPEC 2.2, D5) - at the current n=5 Wilcoxon is at its floor p=0.0625."
+   },
+   {
+    "name": "Grid driver run_grid.ps1 (rep / sample_unit axes)",
+    "state": "stub_or_partial",
+    "evidence": "scripts/run_grid.ps1:68 and :108 build the run tag with a LITERAL: (\"lidc_binary_slice_\" + $arm + \"_rep0_fold\" + $f + ...). Line 124 passes hardcoded \"--sample-unit\", \"slice\", \"--rep\", \"0\". The param block (lines 27-42) has -Archs/-Arms/-Folds/-Phase but NO -Reps and NO -SampleUnit. Confirmed independently by the contract gate, which lists repetition.per_setting.S2.repeats/folds as 'deferred - the subset stage uses CLI arguments'.",
+    "work_needed": "Add -Reps and -SampleUnits string params, split them like $Archs (lines 57-59), and thread them into the $plan tag, the $run tag and $pyArgs. src/train.py already accepts --rep and --sample-unit (src/train.py:86-87) so no training-code change is needed. Also reconsider the default -Patience 30 (line 39), which disables early stopping at max_epochs 30 while config declares patience 10.",
+    "blocking_for": "Cannot launch any rep1/rep2 or nodule-unit run at all."
+   },
+   {
+    "name": "Analysis scripts generality (analyze_gap.py / audit_controls.py)",
+    "state": "stub_or_partial",
+    "evidence": "scripts/analyze_gap.py:42 `tag = f\"lidc_binary_slice_{arm}_rep0_fold{fold}\"` and :86 `tag = f\"lidc_binary_slice_patient_rep0_fold{k}\"` - rep0 and 'slice' are literals.",
+    "work_needed": "Parameterize rep and sample_unit; aggregate the paired gap over n = repeats x folds (15) instead of 5 folds, and feed that vector to src.stats.wilcoxon_paired / nadeau_bengio_se (which already exist and are generic).",
+    "blocking_for": "Reporting the n=15 gap the grid is being run to produce."
+   },
+   {
+    "name": "Architectures ever trained (SPEC asks 7: 5 CNN + 2 transformer)",
+    "state": "stub_or_partial",
+    "evidence": "ONLY 2 of 7 have ever produced an artifact. outputs/models/ = 40 files, outputs/probs/ = 40 .npz, outputs/history/ = 40 .json - every one is densenet121 or efficientnet_b0, slice, rep0, seed42, enhancement=none. Factory src/models.py:12-21 maps all 7 names; I verified all 7 BUILD structurally (timm 1.0.28, torch 2.3.1+cu121, RTX 4060 Ti detected) with pretrained=False. Pretrained weights are cached ONLY for densenet121 and efficientnet_b0 (~/.cache/huggingface/hub has models--timm--densenet121.ra_in1k and models--timm--efficientnet_b0.ra_in1k, nothing else).",
+    "work_needed": "resnet50, convnext_tiny, inception_v3, swin_tiny, maxvit_tiny_tf_224: (a) first pretrained=True call needs an HF-hub download - NOT VERIFIED that the machine has network access at run time; pre-download before the grid; (b) their per-run wall time and peak VRAM are UNMEASURED - run one fold each as a probe before committing the queue; (c) swin/maxvit run at 224 (src/models.py:32), so their inputs are resized, a documented asymmetry vs the 256 CNNs.",
+    "blocking_for": "SPEC 2.4 / I7 (transformer baseline for R1.5, R2); the 420-run S2 budget in SPEC 2.5 assumes 7 archs."
+   },
+   {
+    "name": "Training throughput and per-run VRAM (the sizing inputs)",
+    "state": "exists_and_ran",
+    "evidence": "MEASURED, from outputs/logs/grid_20260719-165744.log 'OK ... <n>s' lines: densenet121 mean 1044 s (17.4 min, range 982-1105, n=9); efficientnet_b0 mean 508 s (8.5 min, range 431-603, n=10). Peak VRAM from outputs/history/*.json: densenet121 0.853 GB (all 20), efficientnet_b0 0.583 GB (all 20) - batch 8 + AMP + grad_accum 4 + channels_last:false at 256^2. That is ~11% of the 8 GB card; VRAM is NOT the binding constraint, wall time is. Both checkpoints (canonical best_loss + final probe) come from ONE training pass (src/train.py:187), so 17 min buys both. Pool being timed: 3284 slices (train 2324 / val 220 / test 740 patient-arm fold0).",
+    "work_needed": "None to measure the 2 known archs. PROJECTION to full cohort: slice pool 11026 = 3.36x the subset -> densenet121 ~58 min/run, efficientnet_b0 ~28 min/run; nodule pool 1695 = 0.52x -> ~9 min and ~4.4 min. Full SPEC S2 (7 archs x 2 sample_units x 2 arms x 15 = 420 runs) at the measured 2-arch mean = ~174 h ~= 7.3 days continuous GPU; if the 5 unmeasured archs run 1.5-2x slower, 11-15 days. Reduced scope, 2 measured archs only: slice+nodule x 2 arms x 15 = 120 runs ~= 50 h (~2.1 days); slice-only 60 runs ~= 43 h (~1.8 days). Model disk ~40-90 GB for 420 runs x 2 checkpoints (measured 28 MB densenet / 16 MB effnet; convnext/swin/maxvit are ~110-130 MB).",
+    "blocking_for": "Sizing the grid honestly - this is the number the researcher is asking for."
+   },
+   {
+    "name": "src/evaluate.py (confusion matrices, precision/recall/F1, per-class tables, bootstrap per SPEC B4)",
+    "state": "absent",
+    "evidence": "src/evaluate.py:12 `raise NotImplementedError(\"STAGE 6 - implement after training (SPEC 6.6).\")`. 16 lines total, docstring only. Has never produced an artifact - outputs/results/ contains exactly one file (stats_nodule.json, written by src/stats.py).",
+    "work_needed": "Implement from the saved probs. It owes reviewer items I1 (confusion matrices), I3 (complete per-model metrics), B9 (assert F1 == 2PR/(P+R)) and the 0.5-threshold classification metrics. The bootstrap half of B4 is now covered by src/stats.py:125 and does not need reimplementing.",
+    "blocking_for": "SPEC 5 rows I1, I3, B9. Not blocking for launching the grid, but the grid produces the probs it must consume."
+   },
+   {
+    "name": "src/stats.py (bootstrap CI, Wilcoxon, Nadeau-Bengio)",
+    "state": "exists_and_ran",
+    "evidence": "STATUS.md is STALE here - it says this is a NotImplementedError stub, but the file was rewritten 2026-07-20 16:37 (10138 bytes). src/stats.py:50 nadeau_bengio_se, :103 wilcoxon_paired (returns min_attainable_p and at_floor), :125-164 bootstrap_ci with cluster resampling on patient_id. It RAN: outputs/results/stats_nodule.json (2026-07-20 16:37) holds AUC/logloss/Brier point + 95% CI for both archs x both arms, n_boot=2000, n_used=2000, clustered=true.",
+    "work_needed": "Three gaps remain: (1) McNemar does not exist anywhere (config stats.within_arm is listed 'deferred' by the contract gate); (2) --level accepts only slice|nodule (src/stats.py:172) - patient level never computed; (3) only stats_nodule.json exists, no stats_slice.json, although D26 declares SLICE the primary level.",
+    "blocking_for": "D26 (slice = primary headline); SPEC 2.2 within-arm comparison; config evaluate.aggregation."
+   },
+   {
+    "name": "Patient-level aggregation (D7 / config evaluate.aggregation: [slice, nodule, patient])",
+    "state": "absent",
+    "evidence": "scripts/verify_config_contract.py output, item 6 of the 'deferred' list: \"evaluate.aggregation - slice + nodule implemented; PATIENT level never computed (D7)\". Confirmed by src/stats.py:172 (choices=['slice','nodule']).",
+    "work_needed": "Add a patient-level roll-up (mean of a patient's slice probabilities -> one label) to the same fold_summary/bootstrap machinery.",
+    "blocking_for": "SPEC 2.6c / I13 - the argument that the conclusion does not depend on the slice-level class-balance artifact."
+   },
+   {
+    "name": "src/ensemble.py, src/figures.py, src/mechanism.py",
+    "state": "absent",
+    "evidence": "src/ensemble.py:12 and src/figures.py:11 are both `raise NotImplementedError` (416 and 399 bytes, docstring only, no artifact ever). src/mechanism.py DOES NOT EXIST - `ls src/` shows no such file, although SPEC 6.8 names it. Contract gate confirms: mechanism.attribution and mechanism.quantify_leakage both 'deferred - mechanism analysis (SPEC 2.6) not implemented'; ensemble.members/method/sensitivity all 'deferred - ensembling stage not implemented'.",
+    "work_needed": "Three separate implementation efforts. mechanism.py (Grad-CAM/SHAP + quantified patient bleed) is reviewer item B10 - 'why, not only how much' - and is one of the MAJOR REVIEW points the grid alone will NOT close. figures.py owes I1/I2 and the forest plot. ensemble.py owes SPEC 2.4 soft-voting.",
+    "blocking_for": "SPEC 5 rows B10, I1, I2, and the ensemble result."
+   },
+   {
+    "name": "Config-hash stamp in history + run_is_valid config-staleness rejection (D25)",
+    "state": "absent",
+    "evidence": "src/train.py:197-201 writes history.json with keys tag/arch/checkpoint/kind/best_epoch/early_stop_would_fire_at/epochs_run/history/test/peak_vram_gb - I dumped a real file and confirmed there is NO config hash. scripts/run_is_valid.py:31-91 checks file loadability, finiteness, y_prob range, and len(y_prob)==len(test split) - no config comparison. DECISIONS.md D25(iv): 'REQUIRED before the full grid (not optional)'.",
+    "work_needed": "Hash the D25-listed keys (channels_last, persistent_workers, epochs, patience, checkpoint, augment params, hu_clip, consensus_rule) into each history.json and have run_is_valid reject a mismatch. Without it, any config change mid-grid must be followed by a manual purge - D25(ii) records this already cost 10 EfficientNet models once.",
+    "blocking_for": "Explicitly named in DECISIONS D25(iv) and STATUS as a pre-grid requirement; at 420 runs manual purges are not viable."
+   },
+   {
+    "name": "CLAHE enhancement ablation arm (SPEC 2.6b / I12)",
+    "state": "stub_or_partial",
+    "evidence": "CODE exists: src/preprocess.py:71-78 apply_enhancement, and --enhancement is plumbed through train.py:90 and the run tag. DATA is a token sample: outputs/metadata/processed_index_clahe.csv = 67 rows / 3 patients; outputs/processed/lidc_clahe = 67 .npy. No clahe run exists in outputs/models|probs|history (all 40 artifacts are '_none_').",
+    "work_needed": "A SECOND full preprocessing pass with --enhancement clahe (11026 slices, ~+8.6 GB, ~2-4 h plus CLAHE compute which is slower than identity), then a matched set of training runs. If the ablation is in scope for this grid it roughly DOUBLES both the preprocessing and the training budget above.",
+    "blocking_for": "SPEC 5 row I12 / reviewer R1.4 - 'enhancement as a controlled experiment, not only discussion'."
+   },
+   {
+    "name": "Checkpoint-fidelity remediation of the 20 canonical runs",
+    "state": "exists_and_ran",
+    "evidence": "STATUS.md is STALE (it says 'REPAIR PENDING'). outputs/metrics/checkpoint_fidelity.txt (2026-07-20 16:25) lists all 20 rows verdict='match' and closes 'OK - every canonical checkpoint equals the early-stopped selection'. Pre-repair artifacts archived at outputs/_pre_remediation/20260720-155734/. I re-ran the STATUS validity snapshot: 20/20 canonical runs valid.",
+    "work_needed": "None for the repair itself. BUT outputs/metrics/canonical_gap_densenet121.txt and canonical_gap_efficientnet_b0.txt are dated 2026-07-19 22:35/22:36, i.e. BEFORE the 2026-07-20 15:57 remediation - they are stale and must not be quoted. The current recomputation is outputs/metrics/audit_controls_POST.txt (16:27), which reports slice AND nodule AND matched-rows gaps.",
+    "blocking_for": "The framing decision (D22 stopping rule) that gates whether the grid is run at all."
+   },
+   {
+    "name": "Statistical headroom the grid must close (why n=5 is not enough)",
+    "state": "exists_and_ran",
+    "evidence": "outputs/metrics/audit_controls_POST.txt, densenet121 CANONICAL: SLICE AUC gap +0.0717 naive95 [+0.0073,+0.1360] but NB95 [-0.0284,+0.1718]; NODULE AUC +0.0379 naive95 [+0.0001,+0.0757], NB95 [-0.0209,+0.0966]. EVERY Nadeau-Bengio interval printed in that file carries '<- includes 0 under D6'. rho = 0.2839, CIs widen x1.556. Wilcoxon p=0.0625 = the exact floor at n=5 (src/stats.py:98 wilcoxon_min_p).",
+    "work_needed": "None - this is the measured justification for sizing the grid. It quantifies the target: n must rise from 5 to 15 (3 repeats x 5 folds) for the NB-corrected interval to have any chance of excluding zero. D28 adds the measured finding that stratification cannot substitute for n (a 15x improvement in fold prevalence balance moved the metric SD by only 1-7%).",
+    "blocking_for": "Nothing - it is the evidence FOR the grid."
+   },
+   {
+    "name": "Repository hygiene: git history and requirements.txt",
+    "state": "stub_or_partial",
+    "evidence": "git: `ls -d .git` -> ABSENT. The repo is plain files with no history, while the paper promises a reproducible repository (SPEC 9.1). requirements.txt: STATUS.md is STALE - it claims torch/torchvision/timm are commented out, but lines 31-33 now pin torch==2.3.1+cu121, torchvision==0.18.1+cu121, timm==1.0.28 with a cu121 index-url note at line 30. I did NOT verify a fresh-env install actually succeeds.",
+    "work_needed": "`git init` + commit the validated state BEFORE launching the grid (so 'grid complete' is a distinguishable commit from '20 canonical runs complete'), and before submission. Verify requirements.txt in a throwaway env - NOT VERIFIED.",
+    "blocking_for": "SPEC 9.1 reproducibility gate ('a fresh clone reproduces outputs/results/'); B7 committed split indices."
+   }
+  ],
+  "summary": "The S2 grid cannot start today: the flagship cohort is only 33.5% preprocessed (3699 of 11026 slices, 288 of 740 patients; 452 patients have zero .npy), and `verify_coverage.py --phase grid` correctly exits 1 on 7328 missing slices. Splits exist only for rep0/slice/250-patients (30 CSVs) and only two of seven architectures have ever been trained (densenet121, efficientnet_b0; 40 artifacts, all slice/rep0/seed42/none) — the other five build structurally but have no cached pretrained weights and no measured VRAM or runtime. The remaining work is a ~2–4 h single-threaded preprocessing pass (+5.7 GB, measured 7.4–13.0 s/scan to_volume on unprocessed scans plus ~0.25 s/slice), a ~1-minute split regeneration, then roughly 7.3 days of continuous GPU for the full 420-run S2 grid — or ~2.1 days if scoped to the two measured architectures — extrapolated from measured 17.4 min (densenet121) and 8.5 min (efficientnet_b0) per run at 0.85 / 0.58 GB peak VRAM, scaled by the 3.36× cohort growth. Three code items are genuinely missing rather than merely unrun and will not be closed by the grid: `run_grid.ps1` and `analyze_gap.py` hardcode `rep0`/`slice` so no repeat-2 or nodule-unit run can even be launched; the D25 config-hash stamp is absent so config-staleness cannot be caught at 420-run scale; and `evaluate.py`, `figures.py`, `ensemble.py` are NotImplementedError stubs while `mechanism.py` does not exist at all, leaving reviewer items B10, I1, I2, I3 and the patient-level aggregation (D7) open regardless of how many runs are queued. Two STATUS.md claims are stale in the project's favour and were corrected here: `src/stats.py` is now implemented and has produced `outputs/results/stats_nodule.json`, and the checkpoint-fidelity repair is done (20/20 \"match\") — but `canonical_gap_*.txt` predates that repair and must not be quoted."
+ }
+]

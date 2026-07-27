@@ -44,12 +44,19 @@ from src.stats import mean_ci, rho_from_splits, wilcoxon_paired
 ARMS = ("patient", "random")
 
 
-def run_tag(arm, rep, fold):
-    return f"lidc_binary_slice_{arm}_rep{rep}_fold{fold}"
+# Split-file prefix. "lidc_binary" = principal cohort; "lidc_binary_ge3" = the >=3-annotator
+# sensitivity cohort (D37), whose runs carry a distinct prefix so they can never be averaged in with
+# the principal ones. Was hardcoded until 2026-07-26 -- caught BEFORE the ge3 grid ran, because a
+# 25 h grid whose artifacts no analysis script can read is 25 h wasted.
+DATASET = "lidc_binary"
 
 
-def run_name(arm, rep, fold, arch, seed=42, enh="none"):
-    return f"{run_tag(arm, rep, fold)}_{arch}_{enh}_seed{seed}"
+def run_tag(arm, rep, fold, dataset=None):
+    return f"{dataset or DATASET}_slice_{arm}_rep{rep}_fold{fold}"
+
+
+def run_name(arm, rep, fold, arch, seed=42, enh="none", dataset=None):
+    return f"{run_tag(arm, rep, fold, dataset)}_{arch}_{enh}_seed{seed}"
 
 
 def load_arm_fold(cfg, arch, arm, rep, fold, pidx, suffix=""):
@@ -188,7 +195,12 @@ def main():
     ap.add_argument("--folds", default="0,1,2,3,4")
     ap.add_argument("--probe", action="store_true", help="also run on the _final PROBE checkpoint")
     ap.add_argument("--json", default="outputs/metrics/audit_controls.json")
+    ap.add_argument("--dataset", default="lidc_binary",
+                    help="split-file prefix: lidc_binary (principal) or lidc_binary_ge3 "
+                         "(>=3-annotator sensitivity cohort, D37 -- never pooled with principal)")
     args = ap.parse_args()
+    global DATASET
+    DATASET = args.dataset
     cfg = load_config(args.config)
     reps = [int(x) for x in args.reps.split(",")]
     folds = [int(x) for x in args.folds.split(",")]

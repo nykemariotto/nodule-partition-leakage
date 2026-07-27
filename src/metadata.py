@@ -10,7 +10,7 @@ Builds, from the pylidc annotation database + on-disk DICOM:
 
 The master table is a SUPERSET (every labelled nodule, min_annotators>=1). Two flags let
 downstream stages select cohorts without rebuilding (SPEC v2):
-  * `cohort_main`             = n_annotators >= metadata.min_annotators_principal (=3).
+  * `cohort_main`             = n_annotators >= metadata.min_annotators_principal (=1, D16 reversal).
   * `is_representative_slice` = the nodule's largest-cross-section slice (sample_unit=nodule).
 
 Unit of analysis (R3 / I4):

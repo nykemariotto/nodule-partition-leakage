@@ -31,10 +31,15 @@ from src.metadata import load_config
 from src.datasets import load_processed_index
 from src.stats import mean_ci, rho_from_splits, mcnemar, mcnemar_from_counts
 
+# Split-file prefix, set from --dataset. "lidc_binary" = principal cohort; "lidc_binary_ge3" =
+# the >=3-annotator sensitivity cohort (D37), distinct prefix so its runs can never be pooled
+# with the principal ones. Was hardcoded until 2026-07-26.
+DATASET = "lidc_binary"
+
 
 def _nodule_frame(cfg, arch, arm, sample_unit, rep, fold, pidx):
     O = os.path.join(cfg["project"]["root"], cfg["paths"]["outputs"])
-    tag = f"lidc_binary_{sample_unit}_{arm}_rep{rep}_fold{fold}"
+    tag = f"{DATASET}_{sample_unit}_{arm}_rep{rep}_fold{fold}"
     npz = os.path.join(O, "probs", f"{tag}_{arch}_none_seed42.npz")
     csv = os.path.join(O, "splits", f"{tag}_test.csv")
     if not (os.path.exists(npz) and os.path.exists(csv)):
@@ -70,7 +75,12 @@ def main():
     ap.add_argument("--sample-unit", default="slice", choices=["slice", "nodule"])
     ap.add_argument("--reps", default="0")
     ap.add_argument("--folds", default="0,1,2,3,4")
+    ap.add_argument("--dataset", default="lidc_binary",
+                    help="split-file prefix: lidc_binary (principal) or lidc_binary_ge3 "
+                         "(>=3-annotator sensitivity cohort, D37 -- never pooled)")
     args = ap.parse_args()
+    global DATASET
+    DATASET = args.dataset
     cfg = load_config(args.config)
     pidx = load_processed_index(cfg, "none")
     archs = args.archs.split(","); arms = args.arms.split(",")

@@ -29,13 +29,18 @@ outputs/_archive_250/
 outputs/_pre_remediation/
 outputs/logs/
 
-# --- mid-grid VOLATILE outputs (partial while the grid runs; commit the
-#     COMPLETE 740-grid probs/history/metrics/results/figures POST-GRID) ---
-outputs/probs/
-outputs/history/
-outputs/metrics/
-outputs/results/
-outputs/figures/
+# --- POST-GRID (2026-07-27): the 740-patient grid is COMPLETE (150 runs, consistency gate exit 0),
+#     so the artifacts below are no longer volatile and ARE committed, as planned. They are what
+#     makes the reviewers' verifiability demand real: every reported number is regenerated from
+#     these by the released code, with no GPU. Total ~11 MB.
+#   outputs/probs/     per-sample y_true + y_prob, one .npz per run
+#   outputs/history/   per-epoch train/val trajectory + the config stamp, one .json per run
+#   outputs/metrics/   analysis outputs
+#   outputs/results/   per-model tables, confusion matrices
+#   outputs/figures/   generated figures
+#
+# Model WEIGHTS stay out (outputs/models/, 6.3 GB) and so do the preprocessed arrays
+# (outputs/processed/, 8.2 GB): both are regenerable from the committed code + indices.
 
 # --- committed ON PURPOSE (do NOT ignore): the executable partition indices
 #     R3 asked for (B7), the cohort/accounting tables, code, config, docs ---
@@ -45,6 +50,10 @@ outputs/figures/
 # --- generated report artifacts (regenerable from source) ---
 *.pdf
 Relatorio_*.html
+# EXCEPTION: the manuscript figures travel with the paper (deterministic outputs of
+# paper/figures/*.py; \includegraphics needs them present to compile).
+!paper/figures/*.pdf
+!paper/figures/*.png
 
 # --- python / os / editors ---
 __pycache__/

@@ -1,0 +1,4 @@
+{
+ "_note": "per-fold cluster bootstrap on patient_id (B4), NEVER pooled across folds; point = fold mean; within-fold bootstrap CI averaged across folds. n_boot=100.",
+ "results": {}
+}

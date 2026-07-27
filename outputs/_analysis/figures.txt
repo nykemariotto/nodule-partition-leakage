@@ -1,0 +1,7 @@
+densenet121: confusion + curves written
+   patient  acc 0.8627  F1 0.7864  prec 0.7869  rec 0.7859  (TN3102 FP348 FN350 TP1285)
+   random   acc 0.9142  F1 0.8908  prec 0.8891  rec 0.8924  (TN9318 FP720 FN696 TP5775)
+efficientnet_b0: confusion + curves written
+   patient  acc 0.8454  F1 0.7625  prec 0.7534  rec 0.7719  (TN3037 FP413 FN373 TP1262)
+   random   acc 0.9129  F1 0.8897  prec 0.8836  rec 0.8958  (TN9274 FP764 FN674 TP5797)
+wrote E:/NODULES\outputs\results\confusion_matrices.json and E:/NODULES\outputs\figures/*.png

@@ -1,0 +1,46 @@
+
+=== densenet121 | CANONICAL | from ARCHIVED probs (outputs/probs/*.npz) ===
+ fold  n_patient  n_random  n_matched  matched_nodules  matched_pos_rate
+    0        740       657        129               78          0.658915
+    1        696       657        145               70          0.668966
+    2        666       657        158               77          0.525316
+    3        598       657        106               54          0.641509
+    4        584       656         99               60          0.565657
+  gap = random - patient (AUC) / patient - random (log-loss, Brier)
+  SLICE (pre-reg primary) AUC        +0.0717  naive95 [+0.0073,+0.1360]  NB95 [-0.0284,+0.1718]  +5/5  <- includes 0 under D6
+  SLICE log-loss                     +0.1920  naive95 [+0.0556,+0.3285]  NB95 [-0.0202,+0.4042]  +5/5  <- includes 0 under D6
+  SLICE Brier                        +0.0588  naive95 [+0.0126,+0.1049]  NB95 [-0.0130,+0.1306]  +5/5  <- includes 0 under D6
+  NODULE AUC                         +0.0379  naive95 [+0.0001,+0.0757]  NB95 [-0.0209,+0.0966]  +5/5  <- includes 0 under D6
+  NODULE log-loss                    +0.1410  naive95 [+0.0431,+0.2389]  NB95 [-0.0113,+0.2932]  +5/5  <- includes 0 under D6
+  NODULE Brier                       +0.0426  naive95 [+0.0091,+0.0760]  NB95 [-0.0095,+0.0946]  +5/5  <- includes 0 under D6
+  MATCHED-rows SLICE AUC             +0.0747  naive95 [-0.0053,+0.1546]  NB95 [-0.0497,+0.1991]  +5/5  <- includes 0 under D6
+  MATCHED-rows SLICE log-loss        +0.1799  naive95 [+0.0473,+0.3125]  NB95 [-0.0264,+0.3862]  +5/5  <- includes 0 under D6
+  MATCHED-rows SLICE Brier           +0.0553  naive95 [+0.0115,+0.0990]  NB95 [-0.0128,+0.1233]  +5/5  <- includes 0 under D6
+  MATCHED-rows NODULE AUC            +0.0497  naive95 [+0.0060,+0.0934]  NB95 [-0.0183,+0.1177]  +5/5  <- includes 0 under D6
+  MATCHED-rows NODULE log-loss       +0.1625  naive95 [+0.0511,+0.2740]  NB95 [-0.0109,+0.3359]  +5/5  <- includes 0 under D6
+  MATCHED-rows NODULE Brier          +0.0482  naive95 [+0.0100,+0.0864]  NB95 [-0.0112,+0.1076]  +5/5  <- includes 0 under D6
+  [D6] Nadeau-Bengio rho = n_test/n_train = 0.2839 -> CIs widen x1.556 vs naive
+
+=== efficientnet_b0 | CANONICAL | from ARCHIVED probs (outputs/probs/*.npz) ===
+ fold  n_patient  n_random  n_matched  matched_nodules  matched_pos_rate
+    0        740       657        129               78          0.658915
+    1        696       657        145               70          0.668966
+    2        666       657        158               77          0.525316
+    3        598       657        106               54          0.641509
+    4        584       656         99               60          0.565657
+  gap = random - patient (AUC) / patient - random (log-loss, Brier)
+  SLICE (pre-reg primary) AUC        +0.1142  naive95 [+0.0379,+0.1905]  NB95 [-0.0045,+0.2329]  +5/5  <- includes 0 under D6
+  SLICE log-loss                     +0.5044  naive95 [+0.1827,+0.8260]  NB95 [+0.0040,+1.0047]  +5/5
+  SLICE Brier                        +0.0952  naive95 [+0.0423,+0.1481]  NB95 [+0.0129,+0.1775]  +5/5
+  NODULE AUC                         +0.0630  naive95 [-0.0077,+0.1337]  NB95 [-0.0469,+0.1729]  +5/5  <- includes 0 under D6
+  NODULE log-loss                    +0.1571  naive95 [+0.0252,+0.2890]  NB95 [-0.0481,+0.3622]  +5/5  <- includes 0 under D6
+  NODULE Brier                       +0.0488  naive95 [+0.0106,+0.0870]  NB95 [-0.0106,+0.1083]  +5/5  <- includes 0 under D6
+  MATCHED-rows SLICE AUC             +0.1107  naive95 [+0.0341,+0.1874]  NB95 [-0.0085,+0.2300]  +5/5  <- includes 0 under D6
+  MATCHED-rows SLICE log-loss        +0.4972  naive95 [+0.1939,+0.8005]  NB95 [+0.0255,+0.9689]  +5/5
+  MATCHED-rows SLICE Brier           +0.1058  naive95 [+0.0515,+0.1602]  NB95 [+0.0213,+0.1904]  +5/5
+  MATCHED-rows NODULE AUC            +0.0940  naive95 [+0.0075,+0.1805]  NB95 [-0.0405,+0.2285]  +5/5  <- includes 0 under D6
+  MATCHED-rows NODULE log-loss       +0.3218  naive95 [+0.0915,+0.5520]  NB95 [-0.0364,+0.6799]  +5/5  <- includes 0 under D6
+  MATCHED-rows NODULE Brier          +0.0847  naive95 [+0.0209,+0.1485]  NB95 [-0.0145,+0.1839]  +5/5  <- includes 0 under D6
+  [D6] Nadeau-Bengio rho = n_test/n_train = 0.2839 -> CIs widen x1.556 vs naive
+
+wrote E:/NODULES\outputs/metrics/audit_controls.json

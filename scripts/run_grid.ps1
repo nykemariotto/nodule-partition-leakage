@@ -39,9 +39,17 @@ param(
   # Seeds per rep come from config.repetition.seed_list; --rep selects which seed src/splits used.
   [string]   $Reps         = "0",
   [string]   $SampleUnits  = "slice",
-  [int]      $MaxEpochs = 30,
-  [int]      $Patience  = 30,
+  # 0 = INHERIT from config.train.* (D48). Pass a value only to deliberately override, and expect
+  # verify_grid_consistency to reject the grid if that override contradicts the config.
+  [int]      $MaxEpochs = 0,
+  [int]      $Patience  = 0,
   [int]      $Seed      = 42,
+  # Dataset tag = the split-file prefix. "lidc_binary" is the principal cohort; "lidc_binary_ge3"
+  # is the >=3-annotator sensitivity cohort (D37), whose splits src/splits.py writes under that
+  # distinct prefix precisely so its runs can NEVER be averaged in with the principal ones.
+  # Was hardcoded in three places until 2026-07-26 - the same defect class as the patience hardcode
+  # (D48): a value the script asserts rather than receives.
+  [string]   $Dataset   = "lidc_binary",
   [string]   $Python    = "C:\ProgramData\miniconda3\envs\nodules\python.exe",
   [string]   $Root      = "E:\NODULES"
 )
@@ -56,7 +64,14 @@ function Write-Log {
   param([string]$Message)
   $line = "{0}  {1}" -f (Get-Date -Format "yyyy-MM-dd HH:mm:ss"), $Message
   Write-Output $line
-  Add-Content -Path $master -Value $line -Encoding UTF8
+  # The master log is a CONVENIENCE, not an artifact: the run artifacts and the per-run logs are
+  # written elsewhere and are what the gates read. A reader holding the file open (e.g. tailing it
+  # with `Get-Content -Wait`, which takes a lock in PS 5.1) must never be able to interrupt a
+  # multi-hour grid. Retry briefly, then give up SILENTLY -- console output above is the real record.
+  for ($i = 0; $i -lt 3; $i++) {
+    try { Add-Content -Path $master -Value $line -Encoding UTF8 -ErrorAction Stop; break }
+    catch { Start-Sleep -Milliseconds 120 }
+  }
 }
 
 $ArchList = @($Archs -split ',' | ForEach-Object { $_.Trim() } | Where-Object { $_ -ne "" })
@@ -72,7 +87,7 @@ Write-Log "master log: $master"
 # visible here, not discovered later as a silently partial measurement.
 $plan = @()
 foreach ($su in $SampleList) { foreach ($a in $ArchList) { foreach ($m in $ArmList) { foreach ($r in $RepList) { foreach ($f in $FoldList) {
-  $plan += ("lidc_binary_" + $su + "_" + $m + "_rep" + $r + "_fold" + $f + "_" + $a + "_none_seed" + $Seed)
+  $plan += ($Dataset + "_" + $su + "_" + $m + "_rep" + $r + "_fold" + $f + "_" + $a + "_none_seed" + $Seed)
 } } } } }
 Write-Log ("PLAN: {0} runs | sample_units=[{1}] archs=[{2}] arms=[{3}] reps=[{4}] folds=[{5}]" -f $plan.Count, ($SampleList -join ' '), ($ArchList -join ' '), ($ArmList -join ' '), ($RepList -join ' '), ($FoldList -join ' '))
 foreach ($r in $plan) { Write-Log "  planned: $r" }
@@ -114,7 +129,7 @@ foreach ($su in $SampleList) {
   foreach ($arm in $ArmList) {
    foreach ($rep in $RepList) {
     foreach ($fold in $FoldList) {
-      $run = "lidc_binary_" + $su + "_" + $arm + "_rep" + $rep + "_fold" + $fold + "_" + $arch + "_none_seed" + $Seed
+      $run = $Dataset + "_" + $su + "_" + $arm + "_rep" + $rep + "_fold" + $fold + "_" + $arch + "_none_seed" + $Seed
 
       $skipArgs = @("scripts\run_is_valid.py", $run)
       $v = Start-Process -FilePath $Python -ArgumentList $skipArgs -Wait -NoNewWindow -PassThru
@@ -129,10 +144,15 @@ foreach ($su in $SampleList) {
       Write-Log "START $run"
       $t0 = Get-Date
 
-      $pyArgs = @("-u", "-m", "src.train", "--config", $Config, "--dataset", "lidc_binary",
+      # D48: DO NOT hardcode epoch budget / patience here. 0 = inherit config.train.* (src/train.py
+      # falls back to the config when the flag is absent). Hardcoding them is how --max-epochs 8,
+      # channels_last and --patience 30 each silently overrode the DECLARED protocol while every
+      # run still agreed with every other run and the old gate passed.
+      $pyArgs = @("-u", "-m", "src.train", "--config", $Config, "--dataset", $Dataset,
                   "--arch", $arch, "--arm", $arm, "--sample-unit", "$su", "--rep", "$rep",
-                  "--fold", "$fold", "--seed", "$Seed", "--max-epochs", "$MaxEpochs",
-                  "--patience", "$Patience")
+                  "--fold", "$fold", "--seed", "$Seed")
+      if ($MaxEpochs -gt 0) { $pyArgs += @("--max-epochs", "$MaxEpochs") }
+      if ($Patience  -gt 0) { $pyArgs += @("--patience",  "$Patience")  }
       $r = Start-Process -FilePath $Python -ArgumentList $pyArgs -Wait -NoNewWindow -PassThru -RedirectStandardOutput $runLog -RedirectStandardError $runErr
       $secs = [int]((Get-Date) - $t0).TotalSeconds
 

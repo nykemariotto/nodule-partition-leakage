@@ -1,0 +1,24 @@
+
+=== densenet121 | CANONICAL (best_loss) — PAPER NUMBER | per-nodule, 5 folds ===
+ fold  patient_auc  random_auc  gap_auc  gap_logloss  gap_brier
+    0       0.9639      0.9654   0.0015       0.0387     0.0110
+    1       0.9457      0.9748   0.0291       0.1031     0.0246
+    2       0.9043      0.9832   0.0789       0.2205     0.0675
+    3       0.9499      0.9773   0.0274       0.1392     0.0451
+    4       0.9273      0.9834   0.0561       0.2218     0.0736
+  headroom (mean patient AUC): 0.9382
+  gap AUC      : mean +0.0386  95%CI [+0.0018,+0.0755]  folds+ 5/5  Wilcoxon p=0.0625
+  gap log-loss : mean +0.1447  95%CI [+0.0472,+0.2422]  folds+ 5/5
+  gap Brier    : mean +0.0444  95%CI [+0.0110,+0.0777]  folds+ 5/5
+
+=== densenet121 | PROBE (final, max memorization) — mechanism only | per-nodule, 5 folds ===
+ fold  patient_auc  random_auc  gap_auc  gap_logloss  gap_brier
+    0       0.9592      0.9787   0.0195       0.0783     0.0171
+    1       0.9422      0.9765   0.0343       0.1945     0.0365
+    2       0.9106      0.9843   0.0737       0.2665     0.0568
+    3       0.9711      0.9773   0.0062       0.0515     0.0212
+    4       0.9376      0.9855   0.0479       0.1446     0.0456
+  headroom (mean patient AUC): 0.9441
+  gap AUC      : mean +0.0363  95%CI [+0.0039,+0.0687]  folds+ 5/5  Wilcoxon p=0.0625
+  gap log-loss : mean +0.1471  95%CI [+0.0389,+0.2553]  folds+ 5/5
+  gap Brier    : mean +0.0354  95%CI [+0.0148,+0.0560]  folds+ 5/5

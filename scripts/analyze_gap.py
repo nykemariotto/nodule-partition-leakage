@@ -1,17 +1,26 @@
 """
-CANONICAL GAP ANALYSIS (pre-registered) — the paper's number.
+CONFIRMATORY-LEVEL GAP ANALYSIS — the NODULE-AGGREGATED level (D17(i), D26).
 
-For a given architecture, over the 5 folds x {patient, random}, using the CANONICAL
+!! LEVEL WARNING (was mislabelled "the paper's number" until 2026-07-23): this script ALWAYS
+aggregates predictions to ONE VOTE PER NODULE (mean of slice probs). Under D17(i) --
+pre-registered before any number existed -- the SLICE level is the PRIMARY statistically-powered
+result and the nodule level is CONFIRMATORY robustness. The PRIMARY (slice-level) numbers come
+from scripts/audit_controls.py, which reports BOTH levels; D26(iv) requires reporting both, always,
+with the within-nodule correlation declared alongside the slice interval (D26(iii)).
+`--sample-unit` selects WHICH TRAINED RUNS to load (slice-trained vs nodule-trained models); it
+does NOT change the aggregation, which is per-nodule either way. The two scripts agree to ~0.0002
+at the same level, by independent routes (this script RE-RUNS inference; audit_controls reads the
+ARCHIVED probs) -- that agreement is the C1 provenance check, not a discrepancy.
+
+For a given architecture, over reps x folds x {patient, random}, using the CANONICAL
 checkpoint (best_val_loss) as the headline and the PROBE checkpoint (_final, max
 memorization) alongside, compute the per-NODULE leakage-advantage gap in AUC, log-loss and
 Brier (mean-of-slice-probs -> one vote per nodule):
 
     gap (leakage helps random):  AUC/acc = random - patient ; log-loss/Brier = patient - random
 
-Reports per-fold gaps, mean ± 95% CI (t, n=5), folds-positive, Wilcoxon signed-rank
-(n=5 -> DIRECTIONAL, cannot reach p<0.05 by construction), and headroom (mean patient AUC).
-Nadeau–Bengio variance correction (D6) is a future add for the full grid; at n=5 the
-directional read is what the sanity stage supports.
+Reports per-fold gaps, mean, the naive t-CI AND the pre-registered Nadeau-Bengio CI (D6),
+folds-positive, and Wilcoxon signed-rank with its attainable floor (n=15 -> min p = 0.0001).
 
     python scripts/analyze_gap.py --arch densenet121          # canonical only
     python scripts/analyze_gap.py --arch densenet121 --probe  # also print the _final probe
@@ -38,8 +47,9 @@ from src.stats import mean_ci, rho_from_splits, wilcoxon_paired
 
 
 @torch.no_grad()
-def nodule_preds(cfg, arch, arm, fold, suffix, pidx, mean, std, dev, sample_unit="slice", rep=0):
-    tag = f"lidc_binary_{sample_unit}_{arm}_rep{rep}_fold{fold}"
+def nodule_preds(cfg, arch, arm, fold, suffix, pidx, mean, std, dev, sample_unit="slice", rep=0,
+                 dataset="lidc_binary"):
+    tag = f"{dataset}_{sample_unit}_{arm}_rep{rep}_fold{fold}"
     mp = os.path.join(cfg["project"]["root"], cfg["paths"]["outputs"], "models",
                       f"{tag}_{arch}_none_seed42{suffix}.pt")
     if not os.path.exists(mp):
@@ -70,21 +80,24 @@ def nodule_preds(cfg, arch, arm, fold, suffix, pidx, mean, std, dev, sample_unit
                 brier=brier_score_loss(y, p), acc=accuracy_score(y, (p >= 0.5).astype(int)))
 
 
-def analyze(cfg, arch, suffix, label, sample_unit="slice", reps=(0,), folds=range(5)):
+def analyze(cfg, arch, suffix, label, sample_unit="slice", reps=(0,), folds=range(5),
+            dataset="lidc_binary"):
     dev = "cuda" if torch.cuda.is_available() else "cpu"
     pidx = load_processed_index(cfg, "none")
     mean = torch.tensor(IMAGENET_MEAN).view(3, 1, 1); std = torch.tensor(IMAGENET_STD).view(3, 1, 1)
     rows = []
     for rep in reps:
         for k in folds:
-            mp = nodule_preds(cfg, arch, "patient", k, suffix, pidx, mean, std, dev, sample_unit, rep)
-            mr = nodule_preds(cfg, arch, "random", k, suffix, pidx, mean, std, dev, sample_unit, rep)
+            mp = nodule_preds(cfg, arch, "patient", k, suffix, pidx, mean, std, dev, sample_unit, rep,
+                              dataset)
+            mr = nodule_preds(cfg, arch, "random", k, suffix, pidx, mean, std, dev, sample_unit, rep,
+                              dataset)
             if mp is None or mr is None:
                 print(f"  rep{rep} fold{k}: MISSING ({'patient' if mp is None else ''}{'/random' if mr is None else ''}) - skipped")
                 continue
             # split sizes feed the Nadeau-Bengio rho (D6); read from the patient arm's own splits
             S = os.path.join(cfg["project"]["root"], cfg["paths"]["outputs"], "splits")
-            tag = f"lidc_binary_{sample_unit}_patient_rep{rep}_fold{k}"
+            tag = f"{dataset}_{sample_unit}_patient_rep{rep}_fold{k}"
             n_te = len(pd.read_csv(os.path.join(S, f"{tag}_test.csv")))
             n_tr = len(pd.read_csv(os.path.join(S, f"{tag}_train.csv")))
             rows.append(dict(rep=rep, fold=k, patient_auc=mp["auc"], random_auc=mr["auc"],
@@ -93,7 +106,11 @@ def analyze(cfg, arch, suffix, label, sample_unit="slice", reps=(0,), folds=rang
     if not rows:
         print(f"  [{arch} {label}] no complete (rep,fold) points yet."); return
     df = pd.DataFrame(rows)
-    print(f"\n=== {arch} | {sample_unit} | {label} | per-nodule, n={len(df)} (rep x fold) ===")
+    print(f"\n=== {arch} | runs: {sample_unit}-trained | {label} | metric level: NODULE-AGGREGATED "
+          f"| n={len(df)} (rep x fold) ===")
+    if sample_unit == "slice":
+        print("    NOTE: these are NOT slice-level numbers. The pre-registered PRIMARY level "
+              "(D17(i)) is SLICE-level, from scripts/audit_controls.py.")
     print(df.round(4).to_string(index=False))
     print(f"  headroom (mean patient AUC): {df['patient_auc'].mean():.4f}")
     # Intervals come from src/stats.py — the single implementation (D27). Both the naive and the
@@ -123,14 +140,18 @@ def main():
     ap.add_argument("--reps", default="0", help="comma-separated rep indices; grid S2 = 0,1,2 (n=15)")
     ap.add_argument("--folds", default="0,1,2,3,4")
     ap.add_argument("--probe", action="store_true", help="also print the _final (memorization) probe")
+    ap.add_argument("--dataset", default="lidc_binary",
+                    help="split-file prefix: lidc_binary (principal) or lidc_binary_ge3 "
+                         "(>=3-annotator sensitivity cohort, D37 -- never pooled with principal)")
     args = ap.parse_args()
     cfg = load_config(args.config)
     reps = [int(x) for x in args.reps.split(",")]
     folds = [int(x) for x in args.folds.split(",")]
-    analyze(cfg, args.arch, "", "CANONICAL (best_loss) — PAPER NUMBER", args.sample_unit, reps, folds)
+    analyze(cfg, args.arch, "", "CANONICAL (best_loss) - CONFIRMATORY", args.sample_unit, reps, folds,
+            args.dataset)
     if args.probe:
-        analyze(cfg, args.arch, "_final", "PROBE (final, max memorization) — mechanism only",
-                args.sample_unit, reps, folds)
+        analyze(cfg, args.arch, "_final", "PROBE (final, max memorization) - mechanism only",
+                args.sample_unit, reps, folds, args.dataset)
 
 
 if __name__ == "__main__":

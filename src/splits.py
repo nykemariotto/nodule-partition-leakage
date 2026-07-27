@@ -78,6 +78,17 @@ def make_splits(cfg, dataset, sample_unit, arm, repeats, folds, limit_patients, 
             fold_of = df["patient_id"].map(pat_fold).to_numpy()
         elif arm == "random":
             fold_of = _fold_assign(np.arange(len(df)), folds, seed)
+        elif arm == "nodule":
+            # ARM C (DECISIONS D43): group by NODULE, not by patient. All slices of one nodule stay
+            # on the same side (route 1, within-nodule redundancy, is ELIMINATED), but nodules are
+            # assigned independently of the patient, so a patient's other nodules can land across the
+            # boundary (route 2, same-patient leakage, stays ACTIVE) -- at FULL per-patient sample
+            # density, which the nodule-SAMPLE-UNIT axis cannot provide (~2 samples/patient there).
+            # gap(C-A) therefore isolates route 2; gap(B-C) isolates route 1.
+            nods = df["nodule_id"].unique()
+            nf = _fold_assign(nods, folds, seed)
+            nod_fold = dict(zip(nods, nf))
+            fold_of = df["nodule_id"].map(nod_fold).to_numpy()
         else:
             raise ValueError(arm)
 
@@ -92,6 +103,15 @@ def make_splits(cfg, dataset, sample_unit, arm, repeats, folds, limit_patients, 
                 val_pats = set(rng.choice(rpats, size=n_val, replace=False))
                 val = rest[rest["patient_id"].isin(val_pats)]
                 train = rest[~rest["patient_id"].isin(val_pats)]
+            elif arm == "nodule":
+                # carve validation by NODULE too, so the train/val boundary respects the same unit
+                # as the train/test boundary (otherwise route 1 would leak back in via validation)
+                rnods = rest["nodule_id"].unique()
+                rng = np.random.RandomState(seed * 100 + k)
+                n_val = max(1, int(round(len(rnods) * val_frac)))
+                val_nods = set(rng.choice(rnods, size=n_val, replace=False))
+                val = rest[rest["nodule_id"].isin(val_nods)]
+                train = rest[~rest["nodule_id"].isin(val_nods)]
             else:
                 rng = np.random.RandomState(seed * 100 + k)
                 val_idx = rng.choice(rest.index.to_numpy(),
@@ -117,6 +137,16 @@ def _assert_leakage(train, val, test, arm):
         assert tr.isdisjoint(te), "LEAKAGE: patient_id overlap train/test in patient arm"
         assert tr.isdisjoint(va), "LEAKAGE: patient_id overlap train/val in patient arm"
         assert va.isdisjoint(te), "LEAKAGE: patient_id overlap val/test in patient arm"
+    elif arm == "nodule":
+        # ARM C must prove BOTH halves of its design, or it does not isolate route 2 (D43):
+        ntr, nva, nte = set(train.nodule_id), set(val.nodule_id), set(test.nodule_id)
+        assert ntr.isdisjoint(nte), "LEAKAGE: nodule_id overlap train/test in nodule arm"
+        assert ntr.isdisjoint(nva), "LEAKAGE: nodule_id overlap train/val in nodule arm"
+        assert nva.isdisjoint(nte), "LEAKAGE: nodule_id overlap val/test in nodule arm"
+        # ...and patient overlap must be PRESENT, else route 2 is silently off and the arm measures
+        # nothing. A fold where it vanished would make gap(C-A)~0 for a trivial reason.
+        assert (tr & te), ("nodule arm must SHARE patients across train/test (route 2 active); "
+                           "it did not, so this fold cannot isolate the patient route")
     else:  # random arm is EXPECTED to overlap patients (that is the point)
         assert (tr & te), "random arm should share patients across train/test (it did not)"
 
@@ -126,7 +156,11 @@ def main():
     ap.add_argument("--config", default="config.yaml")
     ap.add_argument("--dataset", default="lidc_binary")
     ap.add_argument("--sample-unit", default="slice", choices=["slice", "nodule"])
-    ap.add_argument("--arm", default="patient", choices=["patient", "random"])
+    ap.add_argument("--arm", default="patient", choices=["patient", "random", "nodule"],
+                    help="patient = arm A (GroupKFold on patient); random = arm B (KFold, no "
+                         "grouping); nodule = ARM C (D43): grouped by nodule_id, so within-nodule "
+                         "redundancy is eliminated but same-patient leakage stays active at full "
+                         "sample density -- isolates the patient route")
     ap.add_argument("--repeats", type=int, default=1)
     ap.add_argument("--folds", type=int, default=5)
     ap.add_argument("--limit-patients", type=int, default=0, help="0=all; >0 = subset for validation")

@@ -47,9 +47,15 @@ RATE_LO, RATE_HI = 0.25, 0.75
 MAX_DRIFT = 0.15
 
 
-def split_path(cfg, arm, fold, which):
+# Split-file prefix, set from --dataset (see audit_controls). Checking fold balance on the
+# >=3-annotator cohort BEFORE committing GPU hours is the point: that cohort has 535 patients
+# against 740, so per-fold class counts are smaller and could fall under MIN_PER_CLASS.
+DATASET = "lidc_binary"
+
+
+def split_path(cfg, arm, fold, which, rep=0):
     return os.path.join(cfg["project"]["root"], cfg["paths"]["outputs"], "splits",
-                        f"lidc_binary_slice_{arm}_rep0_fold{fold}_{which}.csv")
+                        f"{DATASET}_slice_{arm}_rep{rep}_fold{fold}_{which}.csv")
 
 
 def describe(df):
@@ -67,7 +73,11 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--config", default="config.yaml")
     ap.add_argument("--folds", default="0,1,2,3,4")
+    ap.add_argument("--dataset", default="lidc_binary",
+                    help="split-file prefix: lidc_binary (principal) or lidc_binary_ge3")
     args = ap.parse_args()
+    global DATASET
+    DATASET = args.dataset
     cfg = load_config(args.config)
     folds = [int(x) for x in args.folds.split(",")]
 

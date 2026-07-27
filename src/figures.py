@@ -39,11 +39,16 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
+# Split-file prefix, set from --dataset. "lidc_binary" = principal cohort; "lidc_binary_ge3" = the
+# >=3-annotator sensitivity cohort (D37), which carries a distinct prefix so its runs can never be
+# pooled with the principal ones. Was hardcoded until 2026-07-26.
+DATASET = "lidc_binary"
+
 
 def _load(cfg, arch, arm, fold, pidx, suffix="", rep=0):
     """Archived probs joined to their split rows, at nodule level (mean of slice probs)."""
     O = os.path.join(cfg["project"]["root"], cfg["paths"]["outputs"])
-    tag = f"lidc_binary_slice_{arm}_rep{rep}_fold{fold}"
+    tag = f"{DATASET}_slice_{arm}_rep{rep}_fold{fold}"
     npz = os.path.join(O, "probs", f"{tag}_{arch}_none_seed42{suffix}.npz")
     csv = os.path.join(O, "splits", f"{tag}_test.csv")
     if not (os.path.exists(npz) and os.path.exists(csv)):
@@ -116,48 +121,62 @@ def plot_confusion(cfg, arch, pidx, outdir, reps=(0,), fold_range=range(5)):
     return {"path": p, **cms}
 
 
-def plot_curves(cfg, arch, outdir, reps=(0,), fold_range=range(5)):
+def plot_curves(cfg, arch, outdir, reps=(0,), fold_range=range(5), sample_units=("slice",)):
+    """Learning curves, ONE ROW PER SAMPLE UNIT.
+
+    With both units this figure IS the mechanism, visually (D41): at SLICE level the random arm's
+    validation loss keeps falling with training loss (the leaked val split is memorised alongside
+    it) while the patient arm's diverges upward — the honest generalisation gap. At NODULE level,
+    where within-nodule slice redundancy is eliminated by construction, that asymmetry largely
+    disappears, matching the best_epoch asymmetry (+21.5/+15.6 epochs at slice vs +5.0/+0.3 at
+    nodule) and the ~0 nodule-axis gap.
+    """
     O = os.path.join(cfg["project"]["root"], cfg["paths"]["outputs"])
-    fig, axes = plt.subplots(1, 2, figsize=(9.6, 3.9))
+    sus = list(sample_units)
+    fig, axes = plt.subplots(len(sus), 2, figsize=(9.6, 3.9 * len(sus)), squeeze=False)
     colors = {"patient": "#1b7837", "random": "#c51b7d"}
-    found = False
-    for arm in ("patient", "random"):
-        loss_tr, loss_va, auc_va = [], [], []
-        for rep in reps:
-            for k in fold_range:
-                hp = os.path.join(O, "history",
-                                  f"lidc_binary_slice_{arm}_rep{rep}_fold{k}_{arch}_none_seed42.json")
-                if not os.path.exists(hp):
-                    continue
-                h = json.load(open(hp))["history"]
-                loss_tr.append([x["train_loss"] for x in h])
-                loss_va.append([x["val_loss"] for x in h])
-                auc_va.append([x["val_auc"] for x in h])
-        if not auc_va:
-            continue
-        found = True
-        n = min(len(c) for c in auc_va)
-        ep = np.arange(1, n + 1)
-        def band(mat):
-            A = np.array([c[:n] for c in mat]); return A.mean(0), A.std(0)
-        mu_vl, sd_vl = band(loss_va)
-        axes[0].plot(ep, mu_vl, color=colors[arm], label=f"{arm} val")
-        axes[0].fill_between(ep, mu_vl - sd_vl, mu_vl + sd_vl, color=colors[arm], alpha=0.15)
-        mu_tr, _ = band(loss_tr)
-        axes[0].plot(ep, mu_tr, color=colors[arm], ls="--", alpha=0.6, label=f"{arm} train")
-        mu_au, sd_au = band(auc_va)
-        axes[1].plot(ep, mu_au, color=colors[arm], label=f"{arm}")
-        axes[1].fill_between(ep, mu_au - sd_au, mu_au + sd_au, color=colors[arm], alpha=0.15)
-    if not found:
+    any_found = False
+    for r, su in enumerate(sus):
+        found = False
+        for arm in ("patient", "random"):
+            loss_tr, loss_va, auc_va = [], [], []
+            for rep in reps:
+                for k in fold_range:
+                    hp = os.path.join(O, "history",
+                                      f"{DATASET}_{su}_{arm}_rep{rep}_fold{k}_{arch}_none_seed42.json")
+                    if not os.path.exists(hp):
+                        continue
+                    h = json.load(open(hp))["history"]
+                    loss_tr.append([x["train_loss"] for x in h])
+                    loss_va.append([x["val_loss"] for x in h])
+                    auc_va.append([x["val_auc"] for x in h])
+            if not auc_va:
+                continue
+            found = any_found = True
+            n = min(len(c) for c in auc_va)
+            ep = np.arange(1, n + 1)
+            def band(mat):
+                A = np.array([c[:n] for c in mat]); return A.mean(0), A.std(0)
+            mu_vl, sd_vl = band(loss_va)
+            axes[r][0].plot(ep, mu_vl, color=colors[arm], label=f"{arm} val")
+            axes[r][0].fill_between(ep, mu_vl - sd_vl, mu_vl + sd_vl, color=colors[arm], alpha=0.15)
+            mu_tr, _ = band(loss_tr)
+            axes[r][0].plot(ep, mu_tr, color=colors[arm], ls="--", alpha=0.6, label=f"{arm} train")
+            mu_au, sd_au = band(auc_va)
+            axes[r][1].plot(ep, mu_au, color=colors[arm], label=f"{arm}")
+            axes[r][1].fill_between(ep, mu_au - sd_au, mu_au + sd_au, color=colors[arm], alpha=0.15)
+        axes[r][0].set_xlabel("epoch"); axes[r][0].set_ylabel("loss")
+        axes[r][0].set_title(f"{su}: loss (val solid, train dashed)", fontsize=10)
+        axes[r][1].set_xlabel("epoch"); axes[r][1].set_ylabel("val AUC")
+        axes[r][1].set_title(f"{su}: validation AUC", fontsize=10)
+        if found:
+            axes[r][0].legend(fontsize=8); axes[r][1].legend(fontsize=8)
+    if not any_found:
         plt.close(fig); return None
-    axes[0].set_xlabel("epoch"); axes[0].set_ylabel("loss")
-    axes[0].set_title("loss (val solid, train dashed)"); axes[0].legend(fontsize=8)
-    axes[1].set_xlabel("epoch"); axes[1].set_ylabel("val AUC")
-    axes[1].set_title("validation AUC"); axes[1].legend(fontsize=8)
-    fig.suptitle(f"{arch} — learning curves, mean ± sd over 5 folds "
+    fig.suptitle(f"{arch} — learning curves, mean ± sd over {len(list(reps))}×{len(list(fold_range))} runs "
                  f"(random arm's val keeps improving = memorisation signature)", fontsize=10)
     fig.tight_layout()
-    p = os.path.join(outdir, f"curves_{arch}.png")
+    p = os.path.join(outdir, f"curves_{arch}_{'-'.join(sus)}.png")
     fig.savefig(p, dpi=150); plt.close(fig)
     return p
 
@@ -167,7 +186,16 @@ def main():
     ap.add_argument("--config", default="config.yaml")
     ap.add_argument("--archs", default="densenet121,efficientnet_b0")
     ap.add_argument("--reps", default="0", help="comma-separated rep indices; grid S2 = 0,1,2")
+    ap.add_argument("--sample-units", default="slice",
+                    help="comma-separated: slice,nodule. Passing both puts one ROW per unit in the "
+                         "curves figure — the visual side-by-side of the memorisation asymmetry "
+                         "(present at slice level, absent at nodule level).")
+    ap.add_argument("--dataset", default="lidc_binary",
+                    help="split-file prefix: lidc_binary (principal) or lidc_binary_ge3 "
+                         "(>=3-annotator sensitivity cohort, D37 -- never pooled)")
     args = ap.parse_args()
+    global DATASET
+    DATASET = args.dataset
 
     from src.metadata import load_config
     from src.datasets import load_processed_index
@@ -180,7 +208,8 @@ def main():
     summary = {}
     for arch in args.archs.split(","):
         cm = plot_confusion(cfg, arch, pidx, outdir, reps=reps)
-        plot_curves(cfg, arch, outdir, reps=reps)
+        plot_curves(cfg, arch, outdir, reps=reps,
+                    sample_units=[s.strip() for s in args.sample_units.split(",") if s.strip()])
         if cm:
             summary[arch] = {arm: {k: cm[arm][k] for k in
                                    ("tp", "tn", "fp", "fn", "precision", "recall", "f1", "accuracy")}
