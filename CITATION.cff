@@ -1,0 +1,45 @@
+cff-version: 1.2.0
+message: "If you use this software or its released artifacts, please cite the paper below."
+title: "Data-partition leakage in pulmonary nodule classification: code and partition indices"
+abstract: >-
+  Code, cross-validation partition indices and retained per-sample predictions for a controlled
+  experiment measuring how the unit of data partitioning affects reported performance in pulmonary
+  nodule classification on LIDC-IDRI.
+authors:
+  - family-names: Mariotto
+    given-names: Nycolas
+    affiliation: "Institute of Biosciences, São Paulo State University (UNESP), Botucatu, Brazil"
+  - family-names: Ferreira
+    given-names: Jadson Gabriel
+    affiliation: "Institute of Biosciences, São Paulo State University (UNESP), Botucatu, Brazil"
+  - family-names: Almeida de Andrade
+    given-names: João Rafael
+    affiliation: "Institute of Biosciences, São Paulo State University (UNESP), Botucatu, Brazil"
+  - family-names: Carneiro Faria
+    given-names: João Victor
+    affiliation: "Institute of Biosciences, São Paulo State University (UNESP), Botucatu, Brazil"
+  - family-names: Fattori Alves
+    given-names: Allan Felipe
+    affiliation: "Institute of Biosciences, São Paulo State University (UNESP), Botucatu, Brazil"
+license: MIT
+repository-code: "https://github.com/REPLACE-WITH-REPO-URL"
+
+# GitHub renders `preferred-citation` as the thing to cite INSTEAD of the software, and generates
+# APA/BibTeX from it. Fill in volume/pages/doi/year once the paper is accepted; leaving stale
+# placeholders in a published CITATION.cff is worse than leaving the fields out.
+preferred-citation:
+  type: article
+  title: "REPLACE WITH FINAL TITLE (four candidates are parked in docs/DECISIONS.md, D59)"
+  authors:
+    - family-names: Mariotto
+      given-names: Nycolas
+    - family-names: Ferreira
+      given-names: Jadson Gabriel
+    - family-names: Almeida de Andrade
+      given-names: João Rafael
+    - family-names: Carneiro Faria
+      given-names: João Victor
+    - family-names: Fattori Alves
+      given-names: Allan Felipe
+  journal: "IEEE Access"
+  year: 2026

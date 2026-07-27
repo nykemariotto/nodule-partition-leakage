@@ -52,8 +52,12 @@ outputs/logs/
 Relatorio_*.html
 # EXCEPTION: the manuscript figures travel with the paper (deterministic outputs of
 # paper/figures/*.py; \includegraphics needs them present to compile).
-!paper/figures/*.pdf
-!paper/figures/*.png
+!paper/2_resubmission/figures/*.pdf
+!paper/2_resubmission/figures/*.png
+# EXCEPTION: the PDF that was actually submitted and reviewed. This is provenance, not a build
+# artifact -- it is the only record of exactly what the four reviewers read, and it cannot be
+# regenerated (the manuscript it came from has since been rebuilt).
+!paper/1_original_submission/submitted_manuscript.pdf
 
 # --- python / os / editors ---
 __pycache__/
