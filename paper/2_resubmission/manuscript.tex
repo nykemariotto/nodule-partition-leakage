@@ -58,10 +58,12 @@
 \history{Resubmission of manuscript Access-2026-27906.}
 \doi{10.1109/ACCESS.2026.DOI}
 
-% !!! TITLE PENDING — four candidates are parked in DECISIONS.md (D59) for the advisor meeting.
-% The title below is the ORIGINAL one and is now FACTUALLY WRONG for this study: it names the
-% patient-vs-nodule contrast, which this work measures as NULL (D58). Do not submit as-is.
-\title{Patient-Level Versus Nodule-Level Data Partitioning in Pulmonary Nodule Classification:
+% TITLE DECIDED 2026-07-27 (researcher, with the advisor): option 1 of the four in DECISIONS D59.
+% It asserts the POSITIVE finding, which is the robust one (15/15 folds, both architectures), and
+% deliberately does NOT assert the null -- a title claiming "not the patient" would overclaim a
+% negative result (D41). "Controlled Three-Arm" answers Reviewer 3's demand directly.
+% The change from the original title is declared in the response document header (D63).
+\title{Slice-Level Data Partitioning Inflates Pulmonary Nodule Classification Performance:
 A Controlled Three-Arm Study}
 
 \author{\uppercase{Nycolas Mariotto}\authorrefmark{1},
@@ -93,15 +95,12 @@ every fold: the AUC gap was $+0.064$ (95\% CI $+0.031$ to $+0.097$) for DenseNet
 ($+0.056$ to $+0.108$) for EfficientNet-B0, and calibration degraded in parallel (log-loss $+0.176$
 and $+0.315$; Brier $+0.056$ and $+0.080$). Aggregating predictions to the nodule level reproduced
 the effect ($+0.052$ and $+0.060$). The gap was positive in 15 of 15 folds for both architectures
-and survived re-scoring both arms on identical test rows.
-% !!! ABSTRACT ENDING + ARM C — PENDING THE REFRAMING DECISION (researcher's, see DECISIONS D59).
-% Two things are stale here and must be settled together with the title:
-%  (1) the closing sentence below prescribes PATIENT-level partitioning, but this study measures the
-%      patient route as NULL (D58) -- nodule-level grouping captures essentially all of the benefit;
-%  (2) the abstract does not mention the THREE-ARM design or the route result at all, which is now
-%      the paper's distinctive finding.
-Patient-level partitioning yields
-realistic, substantially lower estimates and should be the methodological standard.
+and survived re-scoring both arms on identical test rows. A third, nodule-grouped arm separates the
+two routes a random split opens: under the assumption that they do not interact, we did not detect a
+contribution from the patient route in either architecture (interval permitting up to $+0.046$ AUC),
+while within-nodule slice redundancy accounted for $92$--$98\%$ of the gap in log-loss and Brier.
+Partitioning below the nodule therefore inflates reported performance substantially, and grouping at
+the nodule captured essentially all of the available protection in this cohort.
 \end{abstract}
 
 \begin{keywords}
@@ -721,17 +720,22 @@ and is not captured.) The practical consequence is that
 why the design is repeated rather than stratified, and why single-split studies cannot quantify the
 gap at all.
 
-% !!! STALE — FOURTH INSTANCE OF THE SAME DEFECT (title, abstract ending, conclusion, and this).
-% This IS the paper's recommendation, and it rests on the patient route, which the three-arm
-% experiment measures as null (D58). Two clauses are specifically contradicted by our own data:
-% "it measures, in part, a model's ability to recognise patients it has already seen" (undetected
-% here), and "we therefore recommend patient-level partitioning" (nodule-level grouping captures
-% essentially all of the benefit). Rewrite as ONE set with the other three -- see DECISIONS D59.
-\textbf{Methodological implication.} Reporting nodule- or slice-level performance without
-patient-level partitioning does not measure clinical generalisation; it measures, in part, a
-model's ability to recognise patients it has already seen. The gap we report is a floor on that
-inflation under a single, clean manipulation. We therefore recommend patient-level partitioning as
-the default for pulmonary-nodule classification, and that studies state the partition unit
+\textbf{Methodological implication.} Reporting slice-level performance without grouping does not
+measure clinical generalisation; it measures, in part, a model's ability to recognise \emph{lesions}
+it has already seen, from adjacent and near-duplicate views of them. The gap we report is a floor on
+that inflation under a single, clean manipulation.
+
+The practical recommendation follows from where the effect actually lives, and it is more specific
+than the one usually given. \textbf{No study should partition below the nodule}: all slices of a lesion
+must fall on the same side of the boundary. That single constraint captured essentially all of the
+protection measurable in this cohort. Patient-level grouping is a strictly stronger condition --- it
+implies nodule-level grouping --- and we did not detect that the additional constraint buys further
+accuracy correction here; but it costs nothing to apply, it is the only choice that remains correct
+if the two units diverge in a different cohort, and our interval leaves room for an effect we were
+not powered to see. We therefore recommend patient-level grouping as the default, while noting that
+the measurable damage in this benchmark comes from partitioning below the \emph{nodule}, and that a
+study which groups by nodule but not by patient is far closer to an honest estimate than the
+literature's framing would suggest. Independently of which unit is chosen, studies should state it
 explicitly and release executable partition indices so the choice is auditable.
 
 \textbf{Limitations.} The study uses 2D backbones on volumetric CT, mirroring the common practice
@@ -749,17 +753,18 @@ documented in adjacent medical-imaging domains \vcite{wen2020,roberts2021}.
 
 % =====================================================================================
 \section{Conclusion}
-% !!! STALE — SAME DEFECT AS THE TITLE AND THE ABSTRACT ENDING (researcher's reframing, D59).
-% This paragraph says the leak is "patient information" and prescribes PATIENT-level partitioning.
-% The three-arm experiment measures the patient route as NULL (D58): grouping by NODULE captures
-% essentially all of the benefit, and patient grouping adds no detectable further protection in this
-% cohort (interval permits up to +0.046 AUC). Rewrite together with the title and abstract; do not
-% fix piecemeal, or the three will disagree with each other.
-Partitioning pulmonary-nodule data at the nodule or slice level allows patient information to leak
-across the train/test boundary and inflates reported performance. In a controlled paired
-experiment that changes only the partition unit, patient-level evaluation produces realistic and
-substantially lower estimates. Patient-level partitioning should be the default methodological
-standard, and studies should report the partition unit explicitly.
+Partitioning pulmonary-nodule data below the nodule inflates reported performance substantially. In a
+controlled experiment that changes only the partition unit, slice-level partitioning raised AUC by
+$+0.064$ and $+0.082$ across two convolutional architectures, in every one of 15 matched folds, and
+the effect survived re-scoring both conditions on identical test rows. Adding a third,
+nodule-grouped condition localises it: under the assumption that the two routes do not interact, we
+did not detect a contribution from the patient route, whereas within-nodule slice redundancy
+accounted for almost all of the gap. Grouping folds at the nodule therefore captured essentially all
+of the protection available in this cohort, and patient-level grouping --- which also guarantees it,
+and which remains the safer default where the two units may diverge --- did not add a detectable
+further margin. The operative recommendation is that no study should partition below the nodule, and
+that every study should state its partition unit explicitly and release executable partition indices
+so the choice is auditable.
 
 % =====================================================================================
 % CREdiT / author contributions (IEEE Access checklist) — PLACEHOLDER, researcher to complete.
