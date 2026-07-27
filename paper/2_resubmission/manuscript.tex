@@ -87,15 +87,14 @@ Deep-learning studies on the LIDC-IDRI database routinely report pulmonary-nodul
 accuracies above 95\% and AUCs above 0.99. Many partition data at the nodule or slice level, so
 observations from one patient appear in both training and test folds. We test, \emph{by design},
 whether the data-partition unit inflates reported performance: on a single cohort, with identical
-labels, preprocessing, architecture, and training, we vary only the partition unit
-(patient-grouped vs.\ random) in a controlled paired experiment, repeated over grouped
-cross-validation. Across $n=15$ matched folds (3 repeats $\times$ 5 folds) and two convolutional
+labels, preprocessing, architecture, and training, we vary only the unit at which folds are formed
+--- by patient, by nodule, or not at all --- and repeat over grouped cross-validation. Across $n=15$ matched folds (3 repeats $\times$ 5 folds) and two convolutional
 architectures, random partitioning inflated slice-level performance in
 every fold: the AUC gap was $+0.064$ (95\% CI $+0.031$ to $+0.097$) for DenseNet-121 and $+0.082$
 ($+0.056$ to $+0.108$) for EfficientNet-B0, and calibration degraded in parallel (log-loss $+0.176$
 and $+0.315$; Brier $+0.056$ and $+0.080$). Aggregating predictions to the nodule level reproduced
 the effect ($+0.052$ and $+0.060$). The gap was positive in 15 of 15 folds for both architectures
-and survived re-scoring both arms on identical test rows. A third, nodule-grouped arm separates the
+and survived re-scoring the two arms on identical test rows. The nodule-grouped arm separates the
 two routes a random split opens: under the assumption that they do not interact, we did not detect a
 contribution from the patient route in either architecture (interval permitting up to $+0.046$ AUC),
 while within-nodule slice redundancy accounted for $92$--$98\%$ of the gap in log-loss and Brier.
