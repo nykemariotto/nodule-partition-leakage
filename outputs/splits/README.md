@@ -57,11 +57,20 @@ python -m src.splits --config config.yaml --dataset lidc_binary \
 regenerating overwrites these files with identical content. The leakage assertions run at generation
 time and fail loudly rather than warning.
 
-## Known limitation
+## The `path` column, and why these files are larger than usual
 
-Each row carries the full sample metadata, including an **absolute path** from the machine that
-generated it (`E:\NODULES\LIDC-IDRI\...`). Only `patient_id`, `nodule_id`, `slice_id`, `z_position`
-and `label` are needed to reconstruct a partition; the rest is redundant and makes these files
-roughly an order of magnitude larger than the identifier lists other repositories ship. The format is
-kept as-is because the analysis code aligns archived predictions to these rows by
-`nodule_id` + `z_position`, and changing it would invalidate that alignment for runs already on disk.
+Each row carries the full sample metadata rather than a bare identifier, which makes these files
+roughly an order of magnitude larger than the identifier lists other repositories ship. Only
+`patient_id`, `nodule_id`, `slice_id`, `z_position` and `label` are needed to reconstruct a
+partition; the remaining columns are redundant for that purpose. The format is kept because the
+analysis code aligns archived predictions to these rows by `nodule_id` + `z_position`, and changing
+the alignment keys would invalidate the runs already on disk.
+
+The `path` column previously held an absolute path from the machine that generated it
+(`E:\NODULES\LIDC-IDRI\...`), which meant these indices resolved on exactly one computer — a defect
+in files offered as independently executable. It is now **relative to the repository root, with
+forward slashes**, so it resolves anywhere once the raw data are placed under the root documented in
+`data/README.md`. The DICOM provenance is unchanged: the manifest directory, the series directory and
+the instance number are all still there, so any row can be traced back to its file in the TCIA
+distribution. Nothing reads this column — images are loaded through `processed_path` in the
+preprocessed index — so it is descriptive, and the rewrite left every other column byte-identical.
