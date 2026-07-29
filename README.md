@@ -27,6 +27,32 @@ A and B alone establish *that* the partition unit matters but cannot say *which*
 random split opens both at once. Arm C closes the within-nodule route while leaving the patient route
 active **at full sample density**, which separates them.
 
+![The controlled three-arm design](paper/2_resubmission/figures/schematic.png)
+
+Every number in that figure is read from the released artifacts when it is drawn, and exported
+alongside it as `schematic_values.csv`; the render fails rather than fall back to a literal.
+
+## What was found
+
+**Partitioning below the nodule inflates reported performance, and the inflation is not where the
+literature assumes.** At the pre-registered primary (slice) level, random partitioning raised AUC by
+**+0.064** for DenseNet-121 (95% CI +0.031 to +0.097) and **+0.082** for EfficientNet-B0
+(+0.056 to +0.108) — positive in **15 of 15** matched folds for both, and unchanged when the two arms
+are re-scored on identical test rows. Calibration degrades in parallel (log-loss +0.176 and +0.315).
+
+The three-arm decomposition localises it. Under the assumption that the two routes do not interact,
+**no contribution from the patient route was detected** in either architecture (the interval permits
+up to +0.046 AUC), while **within-nodule slice redundancy accounts for 92–98%** of the gap in
+log-loss and Brier. The null is measured at full sample density — 12.4 training slices per patient —
+in a cohort that does contain a patient signature to find (4 manufacturers, 18 reconstruction
+kernels, 11 slice thicknesses), so it is not a null produced by starving the model of data.
+
+The honest operating points are AUC 0.915 and 0.909, not the 95–99% the benchmark is usually
+reported at. The practical consequence is a narrower and firmer recommendation than the usual advice:
+**no study should partition below the nodule**, every study should state its partition unit, and
+every study should release executable partition indices so the choice can be audited rather than
+trusted.
+
 ## Requirements
 
 ```
@@ -53,7 +79,8 @@ is only needed to reproduce the artifacts themselves.
 python scripts/verify_grid_consistency.py                        # gate: is the grid one experiment?
 python scripts/audit_controls.py    --reps 0,1,2                 # headline gap + matched-rows control
 python scripts/decompose_routes.py  --reps 0,1,2                 # the three-arm route decomposition
-python -m src.evaluate              --reps 0,1,2                 # per-model tables + McNemar
+python -m src.evaluate --sample-unit slice --reps 0,1,2 --arms patient,random,nodule
+python scripts/check_artifact_freshness.py                       # gate: is any table older than its runs?
 python -m src.figures --reps 0,1,2 --sample-units slice,nodule   # curves + confusion matrices
 
 # --- full rebuild, from raw DICOM (days, GPU) ----------------------------------------
@@ -61,7 +88,7 @@ python scripts/verify_download.py                                # data complete
 python -m src.metadata                                           # cohort tables
 python -m src.preprocess                                         # ROI extraction -> .npy
 python -m src.splits --arm patient --repeats 3 --folds 5         # and --arm random / --arm nodule
-powershell -File scripts/run_grid.ps1 -Phase grid -Arms "patient,random" -Reps "0,1,2"
+powershell -File scripts/run_grid.ps1 -Phase grid -Reps "0,1,2" -Arms "patient,random,nodule" -SampleUnits "slice,nodule"
 ```
 
 `run_grid.ps1` is resumable and idempotent: it skips runs whose artifacts are already **content-valid**
@@ -75,9 +102,10 @@ existence.
 | Table 1 — cohort and acquisition | `outputs/metadata/acquisition_params.csv` | DICOM headers |
 | Table 2 — leakage gap, both levels | `scripts/audit_controls.py` | `outputs/probs/` |
 | Table 3 — three-arm route decomposition | `scripts/decompose_routes.py` | `outputs/probs/` |
-| Fig. 1 — design schematic | `paper/2_resubmission/figures/schematic.py` | — (deterministic drawing) |
-| Fig. 2 — learning curves | `src/figures.py` | `outputs/history/` |
-| Confusion matrices, per-model tables, McNemar | `src/evaluate.py`, `src/figures.py` | `outputs/probs/` |
+| Fig. 1 — design schematic | `paper/2_resubmission/figures/schematic.py` | `outputs/splits/`, `outputs/metadata/` |
+| Fig. 2 — confusion matrices, both architectures | `src/figures.py` | `outputs/probs/` |
+| Fig. 3 — learning curves, both architectures | `src/figures.py` | `outputs/history/` |
+| Per-model tables, McNemar | `src/evaluate.py` | `outputs/probs/` |
 | Stratification / ICC analysis | `scripts/project_stratification.py`, `scripts/project_balancer.py` | `outputs/probs/`, metadata |
 | Consistency gate | `scripts/verify_grid_consistency.py` | `outputs/history/` |
 
@@ -110,6 +138,10 @@ The pipeline refuses to produce a result it cannot stand behind. Gates **block**
   declared config file** (not merely that runs agree with each other), and re-derives from each run's
   stored trajectory that the selected checkpoint is the one the pre-registered early-stopping rule
   would select.
+- **Artifact freshness** — fails if any derived table or figure is older than the run outputs it is
+  computed from. Added after a table in the manuscript was found to have been written from an
+  analysis file that predated a rerun; the numbers were wrong by up to 0.0025 and nothing had
+  warned. A timestamp comparison catches it in one second.
 
 ## Repository layout
 
