@@ -73,3 +73,34 @@ Thumbs.db
 # --- stray scratch logs ---
 *.log
 *.err
+
+# =====================================================================================
+# NOT PUBLISHED (D69). These stay on disk and stay out of the repository.
+# =====================================================================================
+# Peer review is confidential by convention, so the reviewers' verbatim reports and the response
+# document that quotes them are not published. Their version record lives outside git, as the
+# date-stamped copies sync_shared.ps1 leaves in the coauthors' shared folder.
+paper/reviewer_comments.md
+paper/**/response_to_reviewers.md
+paper/**/Response-to-Reviewers.docx
+paper/**/Resubmission-Checklist.docx
+paper/**/IEEE-Access-Response-to-Reviewers-template.docx
+
+# IEEE template scaffolding. The class and bibliography styles carry their own licence, and the
+# Formata typeface shipped with the IEEE Access template is a commercial font licensed to IEEE, so
+# neither is redistributed here. paper/README.md tells the reader to fetch the official template.
+paper/**/IEEEtran.cls
+paper/**/IEEEtran.bst
+paper/**/ieeeaccess.cls
+paper/**/spotcolor.sty
+paper/**/t1-*
+paper/**/logo.png
+paper/**/bullet.png
+paper/**/notaglinelogo.png
+
+# Build and submission archives: containers whose contents are versioned individually.
+paper/**/*.zip
+
+# Superseded audit artifacts, which also recorded the author's user directory.
+outputs/metrics/audit_raw.json
+outputs/metrics/audit_findings.json
