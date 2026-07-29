@@ -18,12 +18,22 @@
 # manuscript SOURCE the compiled PDF is one step behind, and shipping it next to an updated response
 # document would show the advisor prose he has already commented on. Use -Only response in that
 # window, then sync everything once the PDF has been recompiled.
+# The destination is a private lab folder, so it is NOT hardcoded in a public repository. Set
+# NODULES_SHARED once, or pass -Shared. Nothing else in the pipeline depends on this script; it only
+# copies finished deliverables for a coauthor to read.
+#   $env:NODULES_SHARED = "G:\Drives compartilhados\...\Ressubmissao"
 param(
-  [string] $Root   = "E:\NODULES",
-  [string] $Shared = "G:\Drives compartilhados\Laboratorio de Fisica Medica - IBB\Projetos\Projeto - Nodulos pulmonares\Ressubmissao",
+  [string] $Root   = (Split-Path $PSScriptRoot -Parent),
+  [string] $Shared = $env:NODULES_SHARED,
   [ValidateSet("all", "response", "manuscript", "highlighted")]
   [string] $Only   = "all"
 )
+
+if (-not $Shared) {
+  Write-Output "No destination. Set `$env:NODULES_SHARED or pass -Shared '<path>'."
+  Write-Output "This script is a convenience for the authors; it is not part of reproducing the paper."
+  exit 1
+}
 
 # The real path carries accents; resolve it rather than hardcoding a possibly-wrong literal.
 if (-not (Test-Path $Shared)) {
