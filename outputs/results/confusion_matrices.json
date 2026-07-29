@@ -1,5 +1,16 @@
 {
- "_note": "CM counts summed over 5 test folds; patient arm = clean CV partition, random arm test folds overlap by construction (leaky protocol). F1 == 2PR/(P+R) asserted (B9). threshold 0.5, nodule level.",
+ "_note": "CM counts summed over the test folds of each condition. patient- and nodule-grouped folds partition their grouping unit, so each nodule is scored once; the random condition's test folds OVERLAP by construction (leaky protocol), so its summed CM re-scores some nodules. F1 == 2PR/(P+R) asserted (B9). threshold 0.5, nodule level.",
+ "arms": [
+  "patient",
+  "nodule",
+  "random"
+ ],
+ "reps": [
+  0,
+  1,
+  2
+ ],
+ "dataset": "lidc_binary",
  "arch": {
   "densenet121": {
    "patient": {
@@ -12,15 +23,25 @@
     "f1": 0.7864137086903306,
     "accuracy": 0.8627335299901672
    },
+   "nodule": {
+    "tp": 1279,
+    "tn": 3091,
+    "fp": 359,
+    "fn": 356,
+    "precision": 0.7808302808302808,
+    "recall": 0.782262996941896,
+    "f1": 0.7815459822792545,
+    "accuracy": 0.8593903638151426
+   },
    "random": {
-    "tp": 5775,
-    "tn": 9318,
-    "fp": 720,
-    "fn": 696,
-    "precision": 0.8891454965357968,
-    "recall": 0.8924432081594807,
-    "f1": 0.8907913003239242,
-    "accuracy": 0.9142286025804107
+    "tp": 5763,
+    "tn": 9306,
+    "fp": 732,
+    "fn": 708,
+    "precision": 0.8872979214780601,
+    "recall": 0.8905887807139545,
+    "f1": 0.8889403054141601,
+    "accuracy": 0.9127748500817736
    }
   },
   "efficientnet_b0": {
@@ -34,15 +55,25 @@
     "f1": 0.7625377643504531,
     "accuracy": 0.8454277286135693
    },
+   "nodule": {
+    "tp": 1271,
+    "tn": 3005,
+    "fp": 445,
+    "fn": 364,
+    "precision": 0.7406759906759907,
+    "recall": 0.7773700305810397,
+    "f1": 0.7585795284989555,
+    "accuracy": 0.8409046214355949
+   },
    "random": {
-    "tp": 5797,
-    "tn": 9274,
-    "fp": 764,
-    "fn": 674,
-    "precision": 0.8835543362292333,
-    "recall": 0.8958429918096121,
-    "f1": 0.8896562308164518,
-    "accuracy": 0.9128959961233267
+    "tp": 5813,
+    "tn": 9287,
+    "fp": 751,
+    "fn": 658,
+    "precision": 0.885588056063376,
+    "recall": 0.8983155617369804,
+    "f1": 0.8919064058304564,
+    "accuracy": 0.9146526137258465
    }
   }
  }

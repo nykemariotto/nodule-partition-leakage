@@ -14,9 +14,15 @@
 #
 # NOTE: ASCII only. Non-ASCII punctuation has broken the PowerShell parser in this repo before.
 # =====================================================================================
+# -Only sends a subset. The deliverables do not always advance together: after an edit to the
+# manuscript SOURCE the compiled PDF is one step behind, and shipping it next to an updated response
+# document would show the advisor prose he has already commented on. Use -Only response in that
+# window, then sync everything once the PDF has been recompiled.
 param(
   [string] $Root   = "E:\NODULES",
-  [string] $Shared = "G:\Drives compartilhados\Laboratorio de Fisica Medica - IBB\Projetos\Projeto - Nodulos pulmonares\Ressubmissao"
+  [string] $Shared = "G:\Drives compartilhados\Laboratorio de Fisica Medica - IBB\Projetos\Projeto - Nodulos pulmonares\Ressubmissao",
+  [ValidateSet("all", "response", "manuscript", "highlighted")]
+  [string] $Only   = "all"
 )
 
 # The real path carries accents; resolve it rather than hardcoding a possibly-wrong literal.
@@ -37,9 +43,12 @@ $src   = Join-Path $Root "paper\2_resubmission"
 
 # source file -> destination name (the {0} is replaced by the date stamp)
 $items = @(
-  @{ From = "Response-to-Reviewers.docx"; To = "Reviewers response ({0}).docx" },
-  @{ From = "overleaf_upload.pdf";        To = "Manuscript_current ({0}).pdf" }
+  @{ Key = "response";    From = "Response-to-Reviewers.docx";           To = "Reviewers response ({0}).docx" },
+  @{ Key = "manuscript";  From = "overleaf_upload.pdf";                  To = "Manuscript_current ({0}).pdf" },
+  @{ Key = "highlighted"; From = "Manuscript_highlighted-changes.pdf";   To = "Manuscript_highlighted-changes ({0}).pdf" }
 )
+if ($Only -ne "all") { $items = $items | Where-Object { $_.Key -eq $Only } }
+Write-Output ("sending: {0}" -f (($items | ForEach-Object { $_.Key }) -join ", "))
 
 foreach ($it in $items) {
   $f = Join-Path $src $it.From

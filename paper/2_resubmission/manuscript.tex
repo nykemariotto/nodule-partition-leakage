@@ -132,35 +132,43 @@ accurate while having learned to recognise \emph{patients} it has already seen, 
 malignancy itself, would fail silently in deployment, where every patient is new. That such
 performance has not translated into deployed tools motivates scrutiny of \emph{how} it is obtained.
 
-A recurring methodological choice concerns the unit at which data are partitioned into training
-and test sets. LIDC-IDRI contains multiple nodules per patient and multiple annotated slices per
-nodule. When partitioning is performed at the nodule or slice level, slices from the same patient
----sharing anatomy, scanner, reconstruction kernel, and acquisition context---can fall on both
-sides of the split. A model can then exploit patient-specific context rather than
-nodule-intrinsic malignancy signal, a form of data leakage that inflates test performance and
-undermines claims of clinical generalisation.
+One methodological choice recurs across this literature and is the subject of this paper: the unit
+at which the data are divided into training and test sets. The choice matters here because
+LIDC-IDRI is not a collection of independent images. It contains multiple nodules per patient and
+multiple annotated slices per nodule, so when the division is performed at the nodule or the slice
+level, slices belonging to the same patient can end up on both sides of the boundary. Those slices
+share far more than the nodule they depict: they share anatomy, scanner, reconstruction kernel and
+acquisition context. A model can therefore reach the right answer on a test image by recognising the
+patient it came from rather than by recognising malignancy, which is a form of data leakage. It
+inflates the reported test performance without improving the model, and it does so in a way that
+cannot survive deployment, since every deployed patient is new.
 
-Methodological audits in adjacent medical-imaging domains have shown that leakage-free protocols
-reduce reported performance by clinically meaningful margins---for example in brain-MRI
-prediction \vcite{wen2020} and in COVID-19 chest imaging \vcite{roberts2021}. Within
-pulmonary-nodule classification itself, correct patient-level partitioning is used by only a minority
-of high-performing studies and is frequently not reported at all (Section~\ref{sec:related}). That
-literature, however, has not been subjected to an equivalent \emph{controlled} test: existing
-comparisons contrast patient-level results against heterogeneous published numbers that differ in
-task, label definition, architecture, and metric convention, so any difference cannot be
-attributed to partitioning alone.
+The consequences of leakage have been quantified in adjacent medical-imaging domains, where audits
+found that leakage-free protocols reduce reported performance by clinically meaningful margins --- in
+brain-MRI prediction \vcite{wen2020} and in COVID-19 chest imaging \vcite{roberts2021}. Within
+pulmonary-nodule classification the ingredients of the same problem are present, since correct
+patient-level partitioning is used by only a minority of high-performing studies and is frequently
+not reported at all (Section~\ref{sec:related}). What is missing is a comparable \emph{controlled}
+test. The comparisons available so far set patient-level results against published numbers from
+other groups, and those numbers differ in task, label definition, architecture and metric convention
+as well as in partition unit, so a difference between them cannot be attributed to partitioning
+alone. Attributing an effect to one variable requires holding the others fixed, which is what an
+experiment does and a comparison across studies cannot.
 
 \textbf{Gap.} No study on LIDC-IDRI has isolated the partition unit as the single manipulated
 variable while holding cohort, labels, preprocessing, architecture, and training fixed, with
 repeated cross-validation, uncertainty quantification, and paired significance testing.
 
-\textbf{Contributions.} (i) A controlled paired experiment that isolates the partition unit as the
-only changed variable, repeated over grouped cross-validation with per-fold uncertainty and a
-paired significance test. (ii) A decomposition of \emph{where} the inflation manifests---ranking
-(AUC) vs.\ calibration (log-loss, Brier)---as direct mechanistic evidence of leakage. (iii) A
-fully reproducible pipeline: committed partition indices, retained per-sample probabilities,
-released evaluation code, and automated integrity gates that make config--code divergence and
-cross-experiment mixing impossible to introduce silently.
+\textbf{Contributions.} This paper makes three. (i) It reports a controlled paired experiment in
+which the partition unit is the only variable that changes, repeated over grouped cross-validation
+so that every effect carries per-fold uncertainty and a paired significance test rather than a single
+number. (ii) It decomposes \emph{where} the inflation appears, separating the ranking of cases (AUC)
+from the calibration of the probabilities attached to them (log-loss and the Brier score), which
+turns the result into mechanistic evidence about leakage rather than a bare performance difference.
+(iii) It releases a pipeline that can be re-executed rather than merely described: the partition
+indices are committed, the per-sample probabilities are retained, the evaluation code is published,
+and automated gates make it impossible to introduce a divergence between configuration and code, or
+to mix runs from different experiments, without the pipeline failing.
 
 % =====================================================================================
 \section{Related work}
@@ -176,29 +184,36 @@ precisely because they are the architectures the nodule-classification literatur
 because together they span hierarchical-windowed and pure-attention designs, letting us test whether
 the partitioning effect is specific to convolutional inductive biases.
 
-\textbf{Data partitioning and leakage.} Much of this literature partitions data below the patient
-level, and frequently does not state the partition unit at all. Among $17$ high-performance
-LIDC-IDRI malignancy classifiers whose full text we examined, only four formed cross-validation folds
-by patient; the remainder split at the \emph{nodule} level (six) or used a random $k$-fold split
-without specifying the unit (five), and two described no split procedure at all. Nodule-level splits
-are often explicit: one widely reused pipeline randomly divided its ``$406$ malignant and $442$
-benign nodules \ldots into $10$ exclusive partitions'' \vcite{alshabi2019gated} with no patient
-grouping, an arrangement later work inherits \vcite{alshabi2019lg,procan2021}; others randomly divide
-nodules into train and test \vcite{contrastdiag2024} or split ``based on nodule ID'' \vcite{lmlcc2025}.
-Many report only ``$k$-fold cross-validation'' without stating whether same-patient images are
-separated \vcite{alshabi2019lg,procan2021,xiao2020ens}, and some give per-set counts under a heading of
-data ``splitting'' with no description of the procedure \vcite{attnpyramid2024}; a prior case study
-reached the same conclusion, that such studies ``rarely provide the exact details about \ldots the
-sample selection process'' \vcite{pitfalls2021}. Because LIDC-IDRI contains multiple nodules per
-patient and multiple annotated slices per nodule, any of these choices can place images of one patient
-on both sides of the train/test boundary --- a textbook instance of \emph{data leakage}, ``the
-introduction of information about the \ldots target that should not be legitimately available''
-\vcite{kaufman2012}. Correct patient-level partitioning is used by some studies, which explicitly
-confirm ``no shared patients between the two \ldots sets'' \vcite{mcn2020} or adopt a patient-level
-cross-validation split \vcite{cmixnet2019,mase2025}, but it is neither universal nor consistently
-reported; the appropriate unit for a generalisation claim is the patient, not the nodule or the slice.
-(This is a purposive, non-systematic sample assembled to characterise reporting practice; two further
-papers were paywalled and are not counted.)
+\textbf{Data partitioning and leakage.} To see why the partition unit deserves an experiment of its
+own, it helps to know how the choice is currently made and reported. Much of this literature
+partitions data below the patient level, and frequently does not state the partition unit at all.
+Among $17$ high-performance LIDC-IDRI malignancy classifiers whose full text we examined, only four
+formed cross-validation folds by patient. Of the remainder, six split at the \emph{nodule} level,
+five used a random $k$-fold split without specifying the unit, and two described no split procedure
+at all. The nodule-level splits are often stated plainly, so there is no ambiguity about what was
+done: one widely reused pipeline randomly divided its ``$406$ malignant and $442$ benign nodules
+\ldots into $10$ exclusive partitions'' \vcite{alshabi2019gated} without grouping by patient, and
+later work inherits that arrangement \vcite{alshabi2019lg,procan2021}, while others randomly divide
+nodules into train and test \vcite{contrastdiag2024} or split ``based on nodule ID''
+\vcite{lmlcc2025}. The larger group, however, is simply silent: many report only ``$k$-fold
+cross-validation'' without saying whether images of the same patient were kept together
+\vcite{alshabi2019lg,procan2021,xiao2020ens}, and some give per-set counts under a heading of data
+``splitting'' with no description of the procedure at all \vcite{attnpyramid2024}. This is not a new
+observation, since a prior case study reached the same conclusion, that such studies ``rarely provide
+the exact details about \ldots the sample selection process'' \vcite{pitfalls2021}.
+
+The consequence follows from the structure of the dataset. Because LIDC-IDRI contains multiple
+nodules per patient and multiple annotated slices per nodule, any of the choices above can place
+images of one patient on both sides of the train/test boundary, which is a textbook instance of
+\emph{data leakage} --- ``the introduction of information about the \ldots target that should not be
+legitimately available'' \vcite{kaufman2012}. That said, the practice is not uniform: some studies do
+partition by patient and say so, confirming ``no shared patients between the two \ldots sets''
+\vcite{mcn2020} or adopting a patient-level cross-validation split \vcite{cmixnet2019,mase2025}. Our
+point is therefore about consistency rather than universal error. Since a generalisation claim is a
+claim about unseen \emph{patients}, the patient is the unit at which folds should be formed, and
+neither the nodule nor the slice will serve. We emphasise that this sample is purposive and
+non-systematic, assembled to characterise how the partition unit is reported rather than to estimate
+a prevalence; two further papers were paywalled and are not counted.
 
 \textbf{Leakage audits in medical imaging.} Systematic audits in adjacent domains have quantified the
 consequences. In Alzheimer's-disease classification from brain MRI, a reproducible-evaluation study
@@ -234,15 +249,20 @@ radiologist's reading of a $\geq 3$\,mm nodule (one malignancy score and its con
 label rule (below) leaves 1{,}695 binary-labelled nodules; 956 nodules with a median malignancy of
 exactly 3 are excluded as indeterminate. The labelling and grouping unit is always the nodule.
 
-\textbf{Cohort.} The principal cohort keeps every labelled nodule with at least one annotator
-(comparable to the criticised literature), giving 11{,}026 slice-samples (5{,}504 malignant /
-5{,}522 benign) across 740 patients at the slice level, and 1{,}695 nodules (545 malignant /
-1{,}150 benign) at the nodule level. These 740 are the patients contributing at least one
-binary-labelled nodule; the other 270 of LIDC-IDRI's 1{,}010 have only indeterminate (median-score
-3) or sub-criterion nodules and so enter no arm. A high-agreement cohort ($\geq 3$ annotators;
-6{,}973 slices / 879 nodules) is reported as a label-noise sensitivity analysis. Slices per patient range from 1 to
-97 (median 11): this within-patient correlation is precisely why the partition unit matters and
-motivates patient-level grouping.
+\textbf{Cohort.} The principal cohort keeps every labelled nodule that at least one radiologist
+annotated, an inclusive criterion chosen so that the cohort is comparable to the literature this
+study audits rather than quietly cleaner than it. That gives 11{,}026 slice-samples (5{,}504
+malignant / 5{,}522 benign) across 740 patients at the slice level, and 1{,}695 nodules (545
+malignant / 1{,}150 benign) at the nodule level. The count of 740 patients is smaller than
+LIDC-IDRI's 1{,}010 because it includes only those contributing at least one binary-labelled nodule;
+the remaining 270 have only indeterminate nodules, whose median malignancy score is exactly 3, or
+nodules below the size criterion, so they enter no arm of the experiment. Separately, a
+high-agreement cohort restricted to nodules read by at least three annotators (6{,}973 slices / 879
+nodules) is reported as a sensitivity analysis, to test whether label noise changes the conclusions.
+One property of the cohort matters more than the others for what follows: the number of slices
+contributed by a patient ranges from 1 to 97, with a median of 11. Because a patient therefore
+supplies many correlated images rather than a single independent observation, the unit at which folds
+are formed is not a cosmetic choice, and this is what motivates grouping by patient.
 
 \textbf{Acquisition characteristics.} Table~\ref{tab:cohort} summarises the cohort and the
 acquisition parameters of its 748 series, read from the DICOM headers. The cohort is acquired
@@ -295,39 +315,50 @@ follows established practice and keeps the label identical across all partitioni
 cannot confound the contrast.
 
 \subsection{Preprocessing}
-For each nodule we form its region of interest from the 50\% consensus mask---the voxels agreed by
-at least half of the radiologists who annotated that nodule. This follows the ``$50\%$ rule''
-introduced for building a single reference segmentation from the multiple manual segmentations of a
-LIDC nodule \vcite{kubota2011}, and is computed with the \texttt{consensus} routine of the
-\texttt{pylidc} library at its default agreement level \vcite{hancock2016}. We then take the
-in-plane bounding box of that mask, pad it by $8$\,mm, and crop it from \emph{every axial slice the
-nodule spans}. Each cropped slice is one network input: its CT window is clipped to
-$[-1000,400]$ HU and rescaled to $[0,1]$, squared by centre-padding, resized to $256\times256$, and
-replicated to three channels for ImageNet-pretrained backbones. A nodule spanning $s$ slices thus
-contributes $s$ slice-samples---11{,}026 in total, a mean of $6.5$ per nodule---which is why slice-
-and nodule-level counts differ; the nodule-level cohort collapses each nodule to a single
-representative slice, its largest cross-section. Preprocessing is \emph{identical} across all
-arms; image enhancement (e.g.\ CLAHE) is analysed separately as a controlled factor rather than
-folded into the main contrast.
+Because each LIDC nodule carries up to four independent manual segmentations, the first step is to
+reduce them to one. For each nodule we form its region of interest from the 50\% consensus mask, that
+is, the voxels agreed by at least half of the radiologists who annotated that nodule. This follows
+the ``$50\%$ rule'' introduced for building a single reference segmentation from the multiple manual
+segmentations of a LIDC nodule \vcite{kubota2011}, and it is computed with the \texttt{consensus}
+routine of the \texttt{pylidc} library at its default agreement level \vcite{hancock2016}, so the
+step is reproducible rather than bespoke.
+
+From that mask we take the in-plane bounding box, pad it by $8$\,mm so that the immediate
+perinodular context is retained, and crop it from \emph{every axial slice the nodule spans}. Each
+cropped slice becomes one network input, and is prepared as follows: the CT window is clipped to
+$[-1000,400]$ HU, which spans air to bone and prevents extreme values elsewhere in the body from
+compressing the range of interest, then rescaled to $[0,1]$, squared by centre-padding so that the
+aspect ratio is preserved, resized to $256\times256$, and replicated to three channels because the
+ImageNet-pretrained backbones expect a three-channel input.
+
+A nodule spanning $s$ slices therefore contributes $s$ slice-samples, 11{,}026 in total at a mean of
+$6.5$ per nodule, and this is why the slice- and nodule-level counts differ so much: the nodule-level
+cohort collapses each nodule to a single representative slice, its largest cross-section.
+Preprocessing is \emph{identical} across all arms, which is what prevents it from explaining any
+difference between them. We did not include image enhancement (for example CLAHE) as an experimental
+factor, because adding it would enlarge the grid without bearing on the partition-unit question this
+study isolates; the trade-offs are discussed rather than measured.
 
 \subsection{The controlled paired design}
 
-% !!! FIGURE OUT OF DATE — flagged for the manual figure rebuild (researcher, 2026-07-26).
-% The schematic and this caption show TWO arms (A patient, B random). The design is now THREE arms:
-% arm C (nodule-grouped) must be added, with L_nodule = 0.000 and L_patient = 0.690, positioned
-% between A and B. Until the figure is rebuilt, the caption below describes only A and B and is
-% therefore INCOMPLETE relative to the Methods text.
 \begin{figure*}[t]
   \centering
   \includegraphics[width=\textwidth]{schematic.pdf}
-  \caption{The controlled paired design. A single shared pipeline---identical cohort (740 patients,
-  1{,}695 nodules, 11{,}026 slices), preprocessing, and backbone---feeds two arms that differ
-  \emph{only} in the unit at which folds are formed. Arm~A groups folds by patient, so every patient's
-  slices lie entirely within one fold and the patient-leakage rate is $L=0$; arm~B assigns slices
-  randomly, so the same patient's slices straddle training and test ($L\approx0.99$, illustrated by
-  the leaking patient P2). The reported quantity is the leakage-advantage gap
-  \nmath{\Delta_M=M(\pi_B)-M(\pi_A)} per architecture and sample-unit. The only numbers shown are
-  cohort counts and the leakage rates; no performance value is depicted.}
+  \caption{The controlled three-arm design. A single shared pipeline---identical cohort,
+  preprocessing, and backbone---feeds three arms that differ \emph{only} in the unit at which folds
+  are formed. Each arm's strip is a schematic of eight slices, two nodules from each of two
+  patients, bracketed once by nodule and once by patient; a heavier vermillion bracket marks a unit
+  that is split across training and test. Each arm reports the fraction of test rows that share a
+  patient with the training fold --- the patient-leakage rate $L_{\mathrm{pat}}$ --- and the
+  fraction that share a nodule, $L_{\mathrm{nod}}$. (a)~Arm~A groups by
+  patient, so neither unit is split ($L_{\mathrm{pat}}=0.000$). (b)~Arm~C groups by nodule: every
+  nodule stays whole ($L_{\mathrm{nod}}=0.000$) while a patient's nodules may fall on both sides
+  ($L_{\mathrm{pat}}=0.690$), which leaves the patient route active at full sample density and
+  switches the within-nodule route off. (c)~Arm~B assigns slices at random, so both units are split
+  ($L_{\mathrm{pat}}=0.995$, $L_{\mathrm{nod}}=0.973$). Comparing the three arms decomposes the
+  total gap into the two routes, using the same contrasts as Table~\ref{tab:routes}. Cohort counts
+  and leakage rates are read from the released artifacts at render time and exported alongside the
+  figure; no performance value is depicted.}
   \label{fig:design}
 \end{figure*}
 
@@ -492,20 +523,33 @@ directly addresses the central objection rather than patching the confounded com
 
 \subsection{Reproducibility and integrity safeguards}\label{sec:repro}
 % RESULT-INDEPENDENT — describes machinery, not outcomes.
-Every reported quantity is produced by released code from artifacts on disk; no value is
-hand-transcribed. Partition indices are committed; per-sample probabilities are retained;
-train/validation history is stored per run. A hard coverage gate refuses to train unless every
-split sample has a preprocessed image. Writes are atomic. A content-validated skip check counts a
-run as ``done'' only if its weights load, its probabilities are finite and length-matched to the
-test split, and its stamped configuration hash matches the frozen configuration. A config--code
-contract asserts that every configuration key is read by code (or explicitly declared inert), so
-the manuscript cannot describe behaviour the code does not implement. A final gate asserts that the
+Because the concerns raised in review were about verifiability as much as about results, the
+pipeline was rebuilt so that the properties we claim are enforced by the code rather than asserted
+in prose. Every reported quantity is produced by released code from artifacts on disk, and no value
+is hand-transcribed, which removes the class of error that produces internally inconsistent tables.
+The materials a reader needs in order to repeat the analysis are kept rather than regenerated on
+request: the partition indices are committed, the per-sample probabilities are retained, and the
+training and validation history is stored for every run.
+
+Several automated gates then guard specific failure modes, each one chosen because it is a way the
+study could go silently wrong. A hard coverage gate refuses to start training unless every sample
+named in a split has a preprocessed image behind it, so a partition can never be silently smaller
+than it claims. Writes are atomic, so an interrupted run cannot leave a half-written file that later
+reads as valid. A content-validated skip check counts a run as ``done'' only if its weights load,
+its probabilities are finite and match the length of the test split, and its stamped configuration
+hash matches the frozen configuration --- otherwise a crashed run would be mistaken for a completed
+one on the next pass. A contract between the configuration and the code asserts that every
+configuration key is actually read by code, or is explicitly declared inert, so that the manuscript
+cannot describe behaviour the code does not implement. A final gate asserts that the
 entire grid shares one configuration and epoch budget \emph{and that both match the declared
 configuration file}, and it re-derives from each run's stored validation trajectory that the
 checkpoint actually selected is the one the pre-registered early-stopping rule would select --- a
 property that cannot be established by comparing runs to one another, since a uniform deviation
-would satisfy every such comparison. Results are therefore never averaged across mixed experiments,
-and the protocol described here is verified to be the protocol executed.
+would satisfy every such comparison. A freshness gate compares the modification time of every
+derived analysis artefact against the run outputs it is computed from and fails if any artefact is
+older than its own inputs, so a table cannot be quoted from a file that predates a rerun. Results
+are therefore never averaged across mixed experiments, and the protocol described here is verified
+to be the protocol executed.
 
 The reported results are reproducible from the released artifacts: the committed partition indices,
 the retained per-sample probabilities, and the evaluation code regenerate every table and figure
@@ -522,15 +566,21 @@ reported confidence intervals rather than suppressed. Reproducibility of the rep
 % (D35). Structure only; all numbers are placeholders sourced from outputs/results/*.
 \subsection{The leakage-advantage gap}
 Table~\ref{tab:gap} reports the gap for both architectures at both aggregation levels. At the
-pre-registered primary (slice) level the AUC gap is $+0.064$ (Nadeau--Bengio 95\% CI
-$+0.031$ to $+0.097$) for DenseNet-121 and $+0.082$ ($+0.056$ to $+0.108$) for EfficientNet-B0. Every
-metric is positive in all 15 folds for both architectures, and every Nadeau--Bengio interval excludes
-zero. The Wilcoxon signed-rank test attains $p=0.0001$, which is the exact minimum attainable at
-$n=15$; we report the floor explicitly so it is not read as a near-miss. The confirmatory
-nodule-aggregated level reproduces the effect at a smaller magnitude ($+0.052$ and $+0.060$).
-Aggregation reduces the gap but does not remove it, which is expected: averaging a nodule's slice
-predictions changes the unit at which the model is scored, not the fact that it was trained with
-slices of that nodule on both sides of the boundary.
+slice level, which was pre-registered as the primary level of analysis, the AUC gap is $+0.064$ for
+DenseNet-121 (Nadeau--Bengio 95\% CI $+0.031$ to $+0.097$) and $+0.082$ for EfficientNet-B0
+($+0.056$ to $+0.108$). Two features of the result matter as much as its size. First, it is
+consistent rather than driven by a few folds: every metric is positive in all 15 folds for both
+architectures, and every Nadeau--Bengio interval excludes zero. Second, the Wilcoxon signed-rank test
+returns $p=0.0001$, and we state explicitly that this is the smallest value the test can return with
+15 pairs, because a $p$-value of that size would otherwise invite the reading that the effect is
+overwhelmingly large. It means only that all 15 folds agreed in sign, which is the strongest pattern
+this sample size can express; the magnitude must be read from the intervals.
+
+At the confirmatory nodule-aggregated level the effect reproduces at a smaller magnitude, $+0.052$
+and $+0.060$. Aggregation reduces the gap without removing it, which is what one should expect:
+averaging a nodule's slice predictions changes the unit at which the model is \emph{scored}, but it
+does nothing about the fact that the model was \emph{trained} with slices of that same nodule on
+both sides of the boundary.
 
 \begin{table*}[t]
 \centering
@@ -574,12 +624,19 @@ and $+0.072$). Test-set composition therefore does not explain the effect.
 
 \subsection{Which route produces the inflation}
 \label{sec:routes}
-Table~\ref{tab:routes} reports the three-arm comparison. The pattern is the same for both
-architectures, at both aggregation levels, and on all three metrics: the arm~B-versus-arm~C contrast,
-which isolates the within-nodule route, is positive in 15 of 15 folds with the Wilcoxon statistic at
-its attainable floor and a Nadeau--Bengio interval excluding zero; the arm~C-versus-arm~A contrast,
-which isolates the patient route at full sample density, has an interval that includes zero, a
-folds-positive count at chance ($7$--$10$ of $15$), and $p$ between $0.25$ and $1.00$.
+Having established that the partition unit inflates performance, we can now ask which of the two
+routes opened by a random split is responsible, since arm~C was built precisely to separate them.
+Table~\ref{tab:routes} reports the three-arm comparison, and the pattern it shows is the same for
+both architectures, at both aggregation levels, and on all three metrics.
+
+The two contrasts behave in opposite ways. The arm~B-versus-arm~C contrast, which isolates the
+within-nodule route because arm~C differs from arm~B only in keeping each nodule whole, is positive
+in 15 of 15 folds; its Wilcoxon statistic sits at the smallest value attainable with 15 pairs, and
+its Nadeau--Bengio interval excludes zero. The arm~C-versus-arm~A contrast, which isolates the
+patient route because those two arms differ only in whether a patient's nodules may be separated,
+behaves as one would expect of an effect that is not there: its interval includes zero, its
+folds-positive count is at chance ($7$--$10$ of $15$, where $7.5$ would be a coin toss), and its
+$p$-value falls between $0.25$ and $1.00$.
 
 \begin{table*}[t]
 \centering
@@ -611,42 +668,66 @@ Brier, across both architectures and both aggregation levels. For AUC we report 
 side by side and make no attribution claim, for the reason set out in the Methods: AUC is a rank
 statistic and does not decompose over the samples a route acts on.
 
-Two features of the design bear on how much weight the null can carry. It is measured at full sample
-density --- arm~C provides $12.4$ training slices per patient, against $1.9$ in the
-nodule-sample-unit condition --- so it is not a null produced by having too little data per patient
-to learn a patient signature. And the cohort does contain a rich patient-specific signature to learn:
-as Table~\ref{tab:cohort} shows, its scans come from four manufacturers, 18 reconstruction kernels
-and 11 slice thicknesses. A patient-identifying channel was available, and we did not detect it
+A null result invites two obvious objections, and two features of the design were chosen in advance
+to meet them. The first objection is that the patient route might be undetectable simply because
+each patient contributes too little training data for a patient-specific signature to be learned. It
+is not: the null is measured at full sample density, because arm~C provides $12.4$ training slices
+per patient, against only $1.9$ in the condition that uses the nodule as the sample unit. The second
+objection is that there might be no patient-specific signature in the cohort to find in the first
+place. There is: as Table~\ref{tab:cohort} shows, the scans come from four manufacturers, 18
+reconstruction kernels and 11 slice thicknesses, so a model has ample acquisition cues by which
+images of one patient could be recognised as belonging together. A patient-identifying channel was
+therefore available and the data density was sufficient to exploit it, and we still did not detect it
 driving the inflation.
 
 \subsection{Absolute performance and architecture comparison}
 \label{sec:results-mechanism}
 Under patient-level partitioning the two architectures reach nodule-level AUC $0.915$ (DenseNet-121)
 and $0.909$ (EfficientNet-B0), with accuracy $0.863$ and $0.845$. Under random partitioning both rise
-to $0.967$ and $0.968$ (accuracy $0.914$ and $0.913$). The honest operating points are therefore in
+to $0.967$ and $0.969$ (accuracy $0.913$ and $0.915$). The honest operating points are therefore in
 the low-$0.90$s, not the $95$--$99\%$ range the benchmark is usually reported at.
+Figure~\ref{fig:confusion} gives the full confusion matrices behind these figures, so that the
+operating point --- not only the threshold-free AUC --- can be inspected directly.
+
+\begin{figure*}[t]
+  \centering
+  \includegraphics[width=0.92\textwidth]{confusion_matrices.png}
+  \caption{Nodule-level confusion matrices at the $0.5$ threshold, summed over the 15 test folds of
+  each arm (3 repeats $\times$ 5 folds); rows are architectures, columns are partition conditions,
+  and accuracy and F1 for each panel are given above it. Cell shading is the within-panel proportion,
+  so panels remain comparable despite differing totals. Counts in the patient-grouped and
+  nodule-grouped arms partition the cohort exactly, so each nodule is scored once; in the random arm
+  the test folds overlap by construction and some nodules are scored more than once --- a faithful
+  picture of what the leaky protocol produces, not a disjoint partition, which is also why its totals
+  are larger. Regenerated from the archived per-sample probabilities.}
+  \label{fig:confusion}
+\end{figure*}
 
 A within-arm comparison of the two architectures is informative about what leakage does to
 benchmarking. Under patient partitioning McNemar's test separates them ($b=319$, $c=231$,
-$p=0.0002$); under random partitioning it does not ($b=757$, $c=735$, $p=0.59$), and their absolute
-AUCs converge to within $0.001$. Under a leaked protocol the attainable ceiling is set by
+$p=0.0002$); under random partitioning it does not ($b=731$, $c=762$, $p=0.44$), and their absolute
+AUCs converge to within $0.002$. Under a leaked protocol the attainable ceiling is set by
 memorisation rather than by model capacity, so architecture comparison loses its discriminative
 power. This offers a parsimonious explanation for a striking feature of the literature: reported
 performance on this benchmark is high and similar across widely different architectures.
 
 \subsection{Learning dynamics}
 
-\begin{figure}[t]
+\begin{figure*}[t]
   \centering
-  \includegraphics[width=\columnwidth]{curves_densenet121_slice-nodule.png}
-  \caption{Learning curves for DenseNet-121, mean $\pm$ s.d.\ over the 15 runs of each arm. Top:
-  slice level. Under random partitioning (magenta) the validation loss falls with the training loss
-  and the validation AUC climbs to ${\approx}0.97$, the signature of memorising a leaked split; under
-  patient partitioning (green) the validation loss separates upward and the AUC plateaus near
-  $0.905$. Bottom: the same arms trained at the nodule level, where within-nodule slice redundancy is
-  absent by construction --- the two arms become nearly indistinguishable.}
+  \includegraphics[width=\textwidth]{curves_slice-nodule.png}
+  \caption{Learning curves for both architectures, mean $\pm$ s.d.\ over the 15 runs of each arm;
+  validation loss solid, training loss dashed. Top row (a--d): slice level. Under random partitioning
+  (magenta) the validation loss falls with the training loss and the validation AUC climbs to
+  ${\approx}0.97$, the signature of memorising a leaked split; under patient partitioning (green) the
+  validation loss separates upward and the AUC plateaus near $0.905$ (DenseNet-121) and $0.893$
+  (EfficientNet-B0). Bottom row (e--h): the same arms trained at the nodule level, where within-nodule
+  slice redundancy is absent by construction --- the two arms become nearly indistinguishable. The
+  pattern replicates across both backbones, so it is a property of the protocol rather than of a
+  model. The two AUC panels in a row share a $y$-range; the loss panels do not, because the
+  backbones sit at different loss scales.}
   \label{fig:curves}
-\end{figure}
+\end{figure*}
 
 Figure~\ref{fig:curves} shows the mechanism directly. Under random partitioning the validation loss
 falls together with the training loss throughout training, because the validation fold is leaked in
@@ -752,18 +833,24 @@ documented in adjacent medical-imaging domains \vcite{wen2020,roberts2021}.
 
 % =====================================================================================
 \section{Conclusion}
-Partitioning pulmonary-nodule data below the nodule inflates reported performance substantially. In a
-controlled experiment that changes only the partition unit, slice-level partitioning raised AUC by
-$+0.064$ and $+0.082$ across two convolutional architectures, in every one of 15 matched folds, and
-the effect survived re-scoring both conditions on identical test rows. Adding a third,
-nodule-grouped condition localises it: under the assumption that the two routes do not interact, we
-did not detect a contribution from the patient route, whereas within-nodule slice redundancy
-accounted for almost all of the gap. Grouping folds at the nodule therefore captured essentially all
-of the protection available in this cohort, and patient-level grouping --- which also guarantees it,
-and which remains the safer default where the two units may diverge --- did not add a detectable
-further margin. The operative recommendation is that no study should partition below the nodule, and
-that every study should state its partition unit explicitly and release executable partition indices
-so the choice is auditable.
+Partitioning pulmonary-nodule data below the nodule inflates reported performance substantially. We
+established this in a controlled experiment rather than by comparison with other studies, changing
+only the unit at which folds are formed: slice-level partitioning raised AUC by $+0.064$ and
+$+0.082$ across two convolutional architectures, it did so in every one of 15 matched folds, and the
+effect survived a control in which both conditions were re-scored on identical test rows, so it
+cannot be explained by the two conditions having been tested on different cases.
+
+Adding a third, nodule-grouped condition then localises where that inflation comes from. Under the
+assumption that the two routes do not interact, we did not detect a contribution from the patient
+route, whereas within-nodule slice redundancy accounted for almost all of the gap. Grouping folds at
+the nodule therefore captured essentially all of the protection available in this cohort. Patient-level
+grouping did not add a detectable further margin, but it remains the safer default, both because it
+guarantees the same protection and because the two units can diverge in cohorts other than this one.
+
+The operative recommendation is consequently narrower and firmer than the usual advice. No study
+should partition below the nodule; every study should state its partition unit explicitly, since a
+large part of the literature currently does not; and every study should release executable partition
+indices, so that the choice can be audited by a reader rather than taken on trust.
 
 % =====================================================================================
 % CREdiT / author contributions (IEEE Access checklist) — PLACEHOLDER, researcher to complete.
@@ -898,11 +985,12 @@ received the Ph.D. degree in medical physics and is currently a Professor with t
 %  [ ] \gridnum — 2 remain (transformer arm, >=3 cohort). Resolve or delete, then remove the
 %      macro definition so nothing renders in red.
 %  [ ] \pcite — currently unused, but delete the macro if it stays unused.
-%  [ ] FIGURES — being rebuilt manually. Fig. 1 (schematic) still shows TWO arms and its caption
-%      describes two; the design is now three. Old figures from the original submission were
-%      deliberately NOT copied into this directory.
-%  [ ] TABLES — check in the two-column layout whether tab:cohort / tab:gap / tab:routes fit a
-%      single column; promote to table* if not.
+%  [x] FIGURES — DONE 2026-07-28 (D65). Fig. 1 rebuilt with the third arm, real leakage rates
+%      (0.000 / 0.690 / 0.995) and the route decomposition; Fig. 2 is now the confusion-matrix GRID
+%      (was an overflowing table); Fig. 3 shows BOTH architectures and no in-figure title. Old
+%      figures from the original submission were deliberately NOT copied into this directory.
+%  [x] TABLES — all three (tab:cohort / tab:gap / tab:routes) are table*, i.e. already spanning
+%      both columns. The one that overflowed column 1 was the confusion table, now a figure.
 %  [ ] CRediT / Author Contributions — recovered verbatim from the original package and still
 %      describes the ORIGINAL study; must be revised with the coauthors for the REBUILT one.
 %  [ ] Bibliography packaging decision (above).

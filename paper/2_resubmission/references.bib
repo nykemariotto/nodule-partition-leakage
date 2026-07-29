@@ -368,9 +368,11 @@
 %    default.is.forced.et.al = #0, so the truncation branch never fires and the
 %    max-names value (#10) is inert. Put 56 names in the .bib and the submitted PDF
 %    prints 56 names. Truncation must therefore be done in the .bib or via a
-%    IEEEtranBSTCTL entry -- it does not happen by itself. (The "@" is omitted throughout these
-%    notes on purpose: BibTeX scans for "@" to begin an entry and does not honour "%" as a comment
-%    character, so an "@" inside a note would be parsed as a malformed entry.)
+%    IEEEtranBSTCTL entry -- it does not happen by itself. (No at-sign appears anywhere in these
+%    notes, on purpose: BibTeX scans for an at-sign to begin an entry and does NOT honour "%" as a
+%    comment character, so an at-sign inside a note is parsed as a malformed entry. An earlier
+%    version of this very note wrote the character out to explain the rule and produced three
+%    BibTeX errors per compile -- visible in output.blg as "You're missing an entry type".)
 % 2. WRITTEN IEEE RULE (IEEE Reference Guide V3.28.2025, ieeeauthorcenter.ieee.org):
 %    "IEEE publications must list names of all authors, up to six names. If there are
 %    more than six names listed, use the primary author's name followed by 'et al.'"

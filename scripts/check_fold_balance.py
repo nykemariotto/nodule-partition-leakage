@@ -118,11 +118,22 @@ def main():
         print(f"  {arm:8} min {s.min():.4f}  max {s.max():.4f}  range {s.max()-s.min():.4f}  sd {s.std(ddof=1):.4f}")
 
     # ---- R4: is the gap driven by prevalence deviation? ----
-    p = os.path.join(cfg["project"]["root"], "outputs/metrics/audit_controls.json")
-    if os.path.exists(p):
+    # The gap values and the fold prevalences MUST come from the same cohort. Until 2026-07-28 this
+    # read the principal cohort's gaps unconditionally, so running with --dataset lidc_binary_ge3
+    # printed principal-cohort correlations under a >=3-cohort heading -- a cross-cohort comparison
+    # that looks like a within-cohort one. It now refuses rather than mixes.
+    GAPS = {"lidc_binary": "outputs/_analysis/audit_controls_AFTER.json"}
+    rel = GAPS.get(DATASET)
+    p = os.path.join(cfg["project"]["root"], rel) if rel else None
+    if rel is None:
+        print(f"\n(R4 SKIPPED: no gap artifact is registered for dataset '{DATASET}'. R4 needs "
+              f"per-fold gaps from THIS cohort; it cannot borrow another cohort's. Re-run this "
+              f"check after the '{DATASET}' grid completes and its audit_controls artifact exists.)")
+    elif os.path.exists(p):
         ac = json.load(open(p))
-        print("\n--- R4: per-fold gap vs per-fold prevalence deviation (patient arm) ---")
+        print(f"\n--- R4: per-fold gap vs per-fold prevalence deviation (patient arm, {DATASET}) ---")
         dev = df[df.arm == "patient"].sort_values("fold")["drift"].to_numpy()
+        reported = 0
         for key in ac:
             if "CANONICAL" not in key:
                 continue
@@ -131,10 +142,17 @@ def main():
                 if len(g) != len(dev):
                     continue
                 r = float(pd.Series(g).corr(pd.Series(dev), method="spearman"))
+                reported += 1
                 print(f"  {key.split('|')[0]:16} {metric:10} spearman rho = {r:+.3f}"
                       f"{'   <- |rho|>=0.9, inspect' if abs(r) >= 0.9 else ''}")
+        if not reported:
+            # an empty block under a printed heading reads as "R4 passed"; say what happened
+            print(f"  NOT COMPUTED: {rel} carries no per-fold gap series of length {len(dev)}. "
+                  f"R4 needs one gap per fold aligned to the {len(dev)} fold prevalences above; "
+                  f"the current artifact summarises over all 15 (rep x fold) points instead. "
+                  f"R4 is advisory -- R1-R3 are the gate and are unaffected.")
     else:
-        print("\n(R4 skipped: outputs/metrics/audit_controls.json not found)")
+        print(f"\n(R4 skipped: {rel} not found)")
 
     print()
     if failures:
