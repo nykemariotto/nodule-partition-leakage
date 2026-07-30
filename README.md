@@ -60,7 +60,7 @@ conda env create -f environment.yml    # or: pip install -r requirements.txt
 conda activate nodules
 ```
 Python 3.10, PyTorch 2.3.1+cu121. Trained on a single 8 GB GPU (RTX 4060 Ti) using mixed precision
-and gradient accumulation. See `docs/SPEC.md` for the methodology contract.
+and gradient accumulation.
 
 ## Data
 
@@ -151,13 +151,8 @@ scripts/      gates, analysis, and the training driver (run_grid.ps1)
 config.yaml   the frozen experiment configuration; its hash is stamped into every run
 outputs/      splits, per-sample predictions, histories, metrics, figures
 paper/        1_original_submission/ (frozen) and 2_resubmission/ (active) — see paper/README.md
-docs/         SPEC.md (methodology contract), DECISIONS.md, journal.md, STATUS.md
 data/         how to obtain LIDC-IDRI; no data is redistributed
 ```
-
-`docs/DECISIONS.md` is a dated record of every methodological choice and every correction, including
-the ones that went against us. For a paper about evaluation protocol it is part of the evidence, so
-it is kept rather than tidied.
 
 ## A note on paths, if you clone this
 

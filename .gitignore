@@ -104,3 +104,11 @@ paper/**/*.zip
 # Superseded audit artifacts, which also recorded the author's user directory.
 outputs/metrics/audit_raw.json
 outputs/metrics/audit_findings.json
+
+# --- INTERNAL WORKING MATERIAL, NOT PUBLISHED (researcher's instruction, 2026-07-28) ---
+# docs/ is our workspace, not documentation: the decision log, the session journal, the running
+# status, the methodology contract, run plans, and a draft letter to another dataset's authors. It is
+# our context and history, and it stays local. Public documentation is README.md plus the READMEs in
+# paper/, data/ and outputs/splits/.
+CLAUDE.md
+docs/
