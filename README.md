@@ -159,6 +159,23 @@ data/         how to obtain LIDC-IDRI; no data is redistributed
 the ones that went against us. For a paper about evaluation protocol it is part of the evidence, so
 it is kept rather than tidied.
 
+## Citing this work
+
+`CITATION.cff` carries the metadata, so GitHub's "Cite this repository" button generates APA and
+BibTeX directly. It points at the paper rather than the code, which is what should be cited. The
+journal reference is deliberately incomplete — volume, pages and DOI are added on acceptance rather
+than shipped as placeholders that would go stale.
+
+```
+https://github.com/nykemariotto/nodule-partition-leakage
+```
+
 ## Licence
 
 MIT — see `LICENSE`. LIDC-IDRI is distributed by TCIA under its own terms.
+
+The IEEE Access LaTeX template is **not** redistributed here: the class files carry their own licence
+and the Formata typeface shipped with them is a commercial font licensed to IEEE. To compile
+`paper/2_resubmission/manuscript.tex`, download the official template from the IEEE Author Center and
+place its files alongside the manuscript. The figures, the `.bib` and the manuscript source are all
+present.

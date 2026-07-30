@@ -22,9 +22,7 @@ authors:
     given-names: Allan Felipe
     affiliation: "Institute of Biosciences, São Paulo State University (UNESP), Botucatu, Brazil"
 license: MIT
-# repository-code: FILL IN AFTER CREATING THE REPOSITORY. Left commented rather than guessed:
-# a plausible URL that 404s is worse than an absent field, because it looks verified.
-# repository-code: "https://github.com/<user>/<repo>"
+repository-code: "https://github.com/nykemariotto/nodule-partition-leakage"
 
 # GitHub renders `preferred-citation` as the thing to cite INSTEAD of the software, and generates
 # APA/BibTeX from it. Fill in volume/pages/doi/year once the paper is accepted; leaving stale
