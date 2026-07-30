@@ -22,14 +22,16 @@ authors:
     given-names: Allan Felipe
     affiliation: "Institute of Biosciences, São Paulo State University (UNESP), Botucatu, Brazil"
 license: MIT
-repository-code: "https://github.com/REPLACE-WITH-REPO-URL"
+# repository-code: FILL IN AFTER CREATING THE REPOSITORY. Left commented rather than guessed:
+# a plausible URL that 404s is worse than an absent field, because it looks verified.
+# repository-code: "https://github.com/<user>/<repo>"
 
 # GitHub renders `preferred-citation` as the thing to cite INSTEAD of the software, and generates
 # APA/BibTeX from it. Fill in volume/pages/doi/year once the paper is accepted; leaving stale
 # placeholders in a published CITATION.cff is worse than leaving the fields out.
 preferred-citation:
   type: article
-  title: "REPLACE WITH FINAL TITLE (four candidates are parked in docs/DECISIONS.md, D59)"
+  title: "Slice-Level Data Partitioning Inflates Pulmonary Nodule Classification Performance: A Controlled Three-Arm Study"
   authors:
     - family-names: Mariotto
       given-names: Nycolas

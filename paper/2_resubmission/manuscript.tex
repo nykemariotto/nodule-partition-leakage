@@ -496,7 +496,7 @@ evaluation-time leak, which would require a clean validation fold in both arms a
 study actually published. The exact configuration is frozen and its hash is stamped into every run so that no run
 trained under a different configuration can be folded into an average (Section~\ref{sec:repro}).
 
-\subsection{Evaluation and statistics}
+\subsection{Evaluation and statistics}\label{sec:eval}
 Per fold we compute AUC, log-loss, and Brier score (and accuracy, precision, recall, F1 at the
 0.5 threshold), at the nodule level (mean of a nodule's slice probabilities) and at the slice
 level. Metrics are computed \emph{within} each fold and averaged across folds; predictions are
@@ -725,7 +725,15 @@ performance on this benchmark is high and similar across widely different archit
   slice redundancy is absent by construction --- the two arms become nearly indistinguishable. The
   pattern replicates across both backbones, so it is a property of the protocol rather than of a
   model. The two AUC panels in a row share a $y$-range; the loss panels do not, because the
-  backbones sit at different loss scales.}
+  backbones sit at different loss scales.
+  \textbf{These are validation curves, and no value reported anywhere in this paper is computed from
+  them.} They exist to select the checkpoint and to expose the mechanism; every metric in the Results
+  and in Tables~\ref{tab:gap}--\ref{tab:routes} comes from the held-out test fold, as
+  Section~\ref{sec:eval} states. The two are also different quantities: the validation AUC plotted
+  here is per slice, whereas the AUCs quoted in the text are per nodule. Their closeness in the
+  random arm is expected rather than coincidental, because a split that ignores the partition unit
+  contaminates the validation fold in exactly the way it contaminates the test fold; in the
+  patient-grouped arm, where both folds are clean, they differ.}
   \label{fig:curves}
 \end{figure*}
 
