@@ -35,13 +35,6 @@ if (-not $Shared) {
   exit 1
 }
 
-# The real path carries accents; resolve it rather than hardcoding a possibly-wrong literal.
-if (-not (Test-Path $Shared)) {
-  $base = "G:\Drives compartilhados"
-  $cand = Get-ChildItem -Path $base -Recurse -Directory -Depth 4 -ErrorAction SilentlyContinue |
-          Where-Object { $_.Name -match "Ressubmiss" } | Select-Object -First 1
-  if ($cand) { $Shared = $cand.FullName }
-}
 if (-not (Test-Path $Shared)) {
   Write-Output "FATAL: shared folder not found. Is Google Drive mounted?"
   exit 1

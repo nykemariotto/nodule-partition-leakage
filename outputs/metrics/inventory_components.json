@@ -156,7 +156,7 @@
    {
     "name": "Pretrained (ImageNet) weights — only 2 of 8 cached locally; the rest need a download",
     "state": "not_verified",
-    "evidence": "`ls C:/Users/Nycolas/.cache/huggingface/hub` contains models--timm--densenet121.ra_in1k and models--timm--efficientnet_b0.ra_in1k ONLY (plus unrelated LLM/ENMG models). All my instantiation tests used pretrained=False; train.py:122 uses pretrained=True. I resolved hub metadata WITHOUT downloading: resnet50.a1_in1k 102 MB · convnext_tiny.in12k_ft_in1k 114 MB · inception_v3.tv_in1k 96 MB · swin_tiny_patch4_window7_224.ms_in1k 114 MB · maxvit_tiny_tf_224.in1k 124 MB · efficientnet_b3.ra2_in1k 49 MB — all resolve, so the network path works.",
+    "evidence": "`ls ~/.cache/huggingface/hub` contains models--timm--densenet121.ra_in1k and models--timm--efficientnet_b0.ra_in1k ONLY (plus unrelated LLM/ENMG models). All my instantiation tests used pretrained=False; train.py:122 uses pretrained=True. I resolved hub metadata WITHOUT downloading: resnet50.a1_in1k 102 MB · convnext_tiny.in12k_ft_in1k 114 MB · inception_v3.tv_in1k 96 MB · swin_tiny_patch4_window7_224.ms_in1k 114 MB · maxvit_tiny_tf_224.in1k 124 MB · efficientnet_b3.ra2_in1k 49 MB — all resolve, so the network path works.",
     "work_needed": "~500 MB of first-use downloads from HuggingFace when the grid first runs a new arch. I did not download them (downloading files needs your explicit go-ahead). A grid launched offline, or with a HF outage, would fail at run 1 of each new arch. Pre-fetching once is a one-line loop and would de-risk the grid."
    },
    {

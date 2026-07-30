@@ -159,6 +159,18 @@ data/         how to obtain LIDC-IDRI; no data is redistributed
 the ones that went against us. For a paper about evaluation protocol it is part of the evidence, so
 it is kept rather than tidied.
 
+## A note on paths, if you clone this
+
+`config.yaml` still points `project.root` and `lidc_dicom_root` at the machine that produced the
+runs. That is deliberate rather than an oversight: `src/train.py` stamps a SHA-256 of the parsed
+configuration into every run, and `scripts/verify_grid_consistency.py` fails the grid if any run's
+stamp disagrees with the config file. Editing those two lines therefore changes the hash and makes
+the 150 archived runs unverifiable against it.
+
+So: to reproduce the **analysis** (the no-GPU path above), you do not need to touch it — the scripts
+read the artifacts, not the raw data. To **retrain**, change those two paths and accept that your
+runs carry a different configuration hash than ours, which is correct, since they are your runs.
+
 ## Citing this work
 
 `CITATION.cff` carries the metadata, so GitHub's "Cite this repository" button generates APA and
