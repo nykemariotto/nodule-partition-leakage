@@ -132,8 +132,14 @@ def main():
     out = {"_note": "fold-averaged per D24 (never pooled); F1==2PR/(P+R) asserted (B9); McNemar is "
                     "within-arm arch-vs-arch on identical test sets (B5), invalid across arms.",
            "sample_unit": args.sample_unit, "reps": reps, "per_model": table, "mcnemar_within_arm": mcn}
-    json.dump(out, open(os.path.join(R, "per_model_metrics.json"), "w"), indent=1, default=str)
-    print(f"wrote {os.path.join(R, 'per_model_metrics.json')}")
+    # The output name DERIVES from the dataset. It used to be a literal, so running this with
+    # --dataset lidc_binary_ge3 would have overwritten the principal cohort's file with the
+    # sensitivity cohort's numbers under the principal cohort's name -- the D62 defect exactly,
+    # fixed on the reading side but not on the writing side. The principal cohort keeps the
+    # original filename so nothing that already points at it breaks.
+    name = "per_model_metrics.json" if DATASET == "lidc_binary" else f"per_model_metrics_{DATASET}.json"
+    json.dump(out, open(os.path.join(R, name), "w"), indent=1, default=str)
+    print(f"wrote {os.path.join(R, name)}")
 
 
 if __name__ == "__main__":

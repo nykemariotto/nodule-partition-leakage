@@ -194,13 +194,18 @@ def main():
     ap.add_argument("--reps", default="0", help="comma-separated rep indices; grid S2 = 0,1,2 (n=15)")
     ap.add_argument("--folds", default="0,1,2,3,4")
     ap.add_argument("--probe", action="store_true", help="also run on the _final PROBE checkpoint")
-    ap.add_argument("--json", default="outputs/metrics/audit_controls.json")
+    # None -> derived from --dataset below, so forgetting the flag cannot make the sensitivity
+    # cohort overwrite the principal cohort's artifact under its own name.
+    ap.add_argument("--json", default=None)
     ap.add_argument("--dataset", default="lidc_binary",
                     help="split-file prefix: lidc_binary (principal) or lidc_binary_ge3 "
                          "(>=3-annotator sensitivity cohort, D37 -- never pooled with principal)")
     args = ap.parse_args()
     global DATASET
     DATASET = args.dataset
+    if args.json is None:
+        suffix = "" if DATASET == "lidc_binary" else f"_{DATASET}"
+        args.json = f"outputs/metrics/audit_controls{suffix}.json"
     cfg = load_config(args.config)
     reps = [int(x) for x in args.reps.split(",")]
     folds = [int(x) for x in args.folds.split(",")]

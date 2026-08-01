@@ -25,27 +25,49 @@ import time
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
-# artifact -> (input glob relative to outputs/, command that regenerates it). Artifacts that are
-# knowingly superseded are listed with `None` as the producer and only warned about.
+# The artifact list is PER COHORT, and deliberately so. Two ways of getting this wrong were found on
+# 2026-08-01, both silent:
+#
+#   1. Input globs must be anchored on the sample unit. A bare "{ds}_*" matches a LONGER dataset
+#      name -- "lidc_binary_*" sweeps in "lidc_binary_ge3_*" -- so finishing the sensitivity grid
+#      made every principal-cohort artifact report as stale. A gate that cries wolf gets ignored,
+#      which is worse than no gate.
+#   2. A single shared list meant that running with --dataset lidc_binary_ge3 checked the PRINCIPAL
+#      cohort's confusion matrices, curves and route decomposition against the sensitivity cohort's
+#      runs. Those artifacts do not exist for that cohort at all -- it has no nodule-grouped arm and
+#      no figures of its own -- so the comparison was meaningless as well as failing.
+#
+# artifact -> (input glob relative to outputs/, command that regenerates it). A producer of None
+# marks an artifact that is knowingly superseded: reported, never fatal.
+_PROBS = "probs/{ds}_slice_*_seed42.npz;probs/{ds}_nodule_*_seed42.npz"
+_HIST = "history/{ds}_slice_*_seed42.json;history/{ds}_nodule_*_seed42.json"
+_FIG = "python -m src.figures --reps 0,1,2 --sample-units slice,nodule"
+
 ARTIFACTS = {
-    "results/per_model_metrics.json":
-        ("probs/{ds}_*_seed42.npz", "python -m src.evaluate --sample-unit slice --reps 0,1,2 "
-                                    "--arms patient,random,nodule"),
-    "results/confusion_matrices.json":
-        ("probs/{ds}_*_seed42.npz", "python -m src.figures --reps 0,1,2 --sample-units slice,nodule"),
-    "figures/confusion_matrices.png":
-        ("probs/{ds}_*_seed42.npz", "python -m src.figures --reps 0,1,2 --sample-units slice,nodule"),
-    "figures/curves_slice-nodule.png":
-        ("history/{ds}_*_seed42.json", "python -m src.figures --reps 0,1,2 "
-                                       "--sample-units slice,nodule"),
-    "_analysis/audit_controls_AFTER.json":
-        ("probs/{ds}_slice_patient_*.npz;probs/{ds}_slice_random_*.npz",
-         "python scripts/audit_controls.py"),
-    "_analysis/decomposition_final.json":
-        ("probs/{ds}_slice_*_seed42.npz", "python scripts/decompose_routes.py"),
-    # superseded on purpose -- reported, never fatal
-    "results/stats_nodule.json": ("probs/{ds}_*_seed42.npz", None),
-    "_analysis/audit_controls.json": ("probs/{ds}_*_seed42.npz", None),
+    "lidc_binary": {
+        "results/per_model_metrics.json":
+            (_PROBS, "python -m src.evaluate --sample-unit slice --reps 0,1,2 "
+                     "--arms patient,random,nodule"),
+        "results/confusion_matrices.json": (_PROBS, _FIG),
+        "figures/confusion_matrices.png": (_PROBS, _FIG),
+        "figures/curves_slice-nodule.png": (_HIST, _FIG),
+        "_analysis/audit_controls_AFTER.json":
+            ("probs/{ds}_slice_patient_*.npz;probs/{ds}_slice_random_*.npz",
+             "python scripts/audit_controls.py"),
+        "_analysis/decomposition_final.json":
+            ("probs/{ds}_slice_*_seed42.npz", "python scripts/decompose_routes.py"),
+        # superseded on purpose
+        "results/stats_nodule.json": (_PROBS, None),
+        "_analysis/audit_controls.json": (_PROBS, None),
+    },
+    # The sensitivity cohort has two arms and no figures of its own, so it has two artifacts.
+    "lidc_binary_ge3": {
+        "results/per_model_metrics_lidc_binary_ge3.json":
+            (_PROBS, "python -m src.evaluate --sample-unit slice --reps 0,1,2 "
+                     "--dataset lidc_binary_ge3"),
+        "metrics/audit_controls_lidc_binary_ge3.json":
+            (_PROBS, "python scripts/audit_controls.py --dataset lidc_binary_ge3 --reps 0,1,2"),
+    },
 }
 
 
@@ -66,7 +88,11 @@ def main():
     outputs = os.path.join(ROOT, "outputs")
 
     stale, missing, superseded = [], [], []
-    for art, (patterns, producer) in ARTIFACTS.items():
+    table = ARTIFACTS.get(args.dataset)
+    if table is None:
+        raise SystemExit(f"no artifact list registered for dataset '{args.dataset}'. Add one "
+                         f"rather than letting it fall through to another cohort's artifacts.")
+    for art, (patterns, producer) in table.items():
         p = os.path.join(outputs, art)
         if not os.path.exists(p):
             missing.append(art)
@@ -91,7 +117,7 @@ def main():
     for art in missing:
         print(f"absent {art} (not yet produced)")
 
-    n = len(ARTIFACTS) - len(missing)
+    n = len(table) - len(missing)
     if stale:
         print(f"\nFAIL: {len(stale)} of {n} artifacts are older than their inputs. Any manuscript "
               f"number taken from them is not what the code on disk now produces.")
