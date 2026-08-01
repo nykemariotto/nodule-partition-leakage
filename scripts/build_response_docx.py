@@ -56,8 +56,12 @@ for b in blocks:
     if combined:
         resp, act = "", bullets_to_text(combined.group(1))
     else:
+        # (c) runs to the END of the item, not to the first blank line. It used to stop at "\n\n",
+        # which silently truncated any action written as more than one paragraph -- item 4.4 lost
+        # every number it reported that way. The blocks were already split on the "**N.M --**"
+        # marker before we get here, so \Z is the correct terminator.
         pb = re.search(r"\n\(b\)(.*?)(?=\n\(c\)|\Z)", body, re.S)
-        pc = re.search(r"\n\(c\)(.*?)(?=\n\n|\Z)", body, re.S)
+        pc = re.search(r"\n\(c\)(.*)", body, re.S)
         resp = clean(pb.group(1)) if pb else ""
         act = clean(pc.group(1)) if pc else ""
     items.append((rev, int(m.group(2)), clean(pa.group(1)) if pa else "", resp, act))

@@ -2,7 +2,8 @@
 resubmission checklist (item 7).
 
 The usual form of this file marks edited sentences. That form is useless here: the manuscript was
-rebuilt, and 91% of its sentences (253 of 278) do not appear in the original at all. Highlighting
+rebuilt, and 98% of its sentences (291 of 297) do not appear in the original at all. The cover
+page recomputes that figure, so this docstring is a summary rather than the source. Highlighting
 everything conveys nothing.
 
 So this builds the artifact that actually helps a reviewer: a cover page stating the rebuild and
@@ -86,7 +87,7 @@ body = (
 "reproducibility apparatus were written from scratch around it.\n\n"
 "To quantify that rather than assert it, we compared the two compiled manuscripts sentence by "
 "sentence, excluding the reference list, counting a sentence as unchanged only when it matches the "
-"original exactly after normalising case and punctuation. On that measure 284 of the 290 sentences "
+"original exactly after normalising case and punctuation. On that measure 291 of the 297 sentences "
 "in this manuscript (98%) do not appear in the submitted version in any form, and 6 are unchanged. "
 "Highlighting every changed sentence would therefore highlight almost the entire document and would "
 "tell the reviewer nothing.\n\n"

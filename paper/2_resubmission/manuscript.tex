@@ -829,9 +829,19 @@ explicitly and release executable partition indices so the choice is auditable.
 \textbf{Limitations.} The study uses 2D backbones on volumetric CT, mirroring the common practice
 it audits; a 3D interaction is future work. Labels are radiologist-consensus rather than
 histopathology; this label noise is identical across arms and so does not bias the paired contrast,
-and we confirm robustness to it with a sensitivity analysis on the high-agreement subcohort (nodules
-read by $\geq 3$ radiologists), where the gap \gridnum{persists on the >=3-annotator cohort}. The
-analysis is confined to LIDC-IDRI; external, multi-institutional validation is
+and we tested robustness to it on the high-agreement subcohort --- the nodules read by $\geq 3$
+radiologists, where each label rests on three or more concurring readings rather than one. The gap
+persists there: at slice level $+0.040$ (Nadeau--Bengio 95\% CI $[+0.021, +0.058]$) for DenseNet-121
+and $+0.062$ ($[+0.030, +0.094]$) for EfficientNet-B0, positive in 15 of 15 folds for both, and
+$+0.037$ and $+0.061$ under the matched-rows control. Requiring three readers also removes the
+nodules the radiologists disagreed about, and those are disproportionately benign, so the subcohort
+is enriched for malignancy: the malignant share rises from $0.499$ to $0.638$ at slice level and from
+$0.322$ to $0.489$ at nodule level. The point estimates there are smaller than in the principal
+cohort, but that difference is \emph{not} attributable to label noise, because agreement and
+prevalence moved together and log-loss and the Brier score are prevalence-sensitive; the analysis was
+pre-specified as directional --- does the gap survive? --- and is led by AUC, the least
+prevalence-sensitive of the three metrics.
+The analysis is confined to LIDC-IDRI; external, multi-institutional validation is
 valuable but out of scope for a methodological audit and is stated as future work. We validated the
 pipeline on a 250-patient subset before scaling; those subset numbers are a pipeline check, not a
 study result, and no value reported in this paper comes from that stage.
