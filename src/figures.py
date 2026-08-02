@@ -5,8 +5,10 @@ Reads ONLY what is already on disk — `outputs/probs/*.npz` (y_true, y_prob) an
 `outputs/history/*.json` (per-epoch train/val). No GPU, no re-inference. Every number traces to a
 saved file, so the figures are reproducible from the released artifacts (the whole point).
 
-Produces TWO figures, each covering every architecture (not one file per architecture -- only one
-architecture's curves reached the submitted manuscript, and that is easy to repeat):
+Produces TWO figures, each covering every architecture DISCOVERED ON DISK (not one file per
+architecture -- only one architecture's curves reached the submitted manuscript, and that is
+easy to repeat). Restricting to a subset with --archs is allowed but renames the output, so a
+partial figure can never occupy the filename the manuscript embeds:
   * confusion_matrices.png  — grid of nodule-level confusion matrices, architectures as rows and
                               partition conditions as columns, lettered panels. The visual of the
                               leakage: the random (leaky) condition looks cleaner than the honest
@@ -29,14 +31,16 @@ construction (measured 78-82% patient reuse per fold), so its summed CM re-score
 across folds; it is a faithful picture of what the leaky protocol produced, not a disjoint
 partition. Stated in the caption and the JSON.
 
-    python -m src.figures                       # densenet121, efficientnet_b0
-    python -m src.figures --archs densenet121
+    python -m src.figures                 # every architecture found on disk
+    python -m src.figures --archs densenet121    # -> a SUFFIXED filename, not the canonical one
 """
 from __future__ import annotations
 
 import argparse
 import json
 import os
+import re
+import string
 
 import numpy as np
 import pandas as pd
@@ -104,8 +108,63 @@ def arm_cm(cfg, arch, arm, pidx, suffix="", reps=(0,), fold_range=range(5)):
 ARM_LABEL = {"patient": "patient-grouped", "random": "random", "nodule": "nodule-grouped"}
 
 
+def run_counts(cfg, arch, arms, reps, folds, sus):
+    """How many of the expected (sample_unit, arm, rep, fold) cells this architecture actually has."""
+    import glob as _glob
+    O = os.path.join(cfg["project"]["root"], cfg["paths"]["outputs"], "probs")
+    have = 0
+    for su in sus:
+        for arm in arms:
+            for r in reps:
+                for k in folds:
+                    f = os.path.join(O, f"{DATASET}_{su}_{arm}_rep{r}_fold{k}_{arch}_none_seed42.npz")
+                    if os.path.exists(f):
+                        have += 1
+    return have, len(sus) * len(arms) * len(reps) * len(folds)
+
+
+def discover_archs(cfg):
+    """Architectures that actually have runs on disk for DATASET, in a stable order.
+
+    Globs are anchored on the sample unit: a bare "{DATASET}_*" also matches a LONGER dataset name,
+    since "lidc_binary" is a prefix of "lidc_binary_ge3", and the sensitivity cohort's runs would be
+    read as the principal cohort's.
+    """
+    import glob as _glob
+    O = os.path.join(cfg["project"]["root"], cfg["paths"]["outputs"], "probs")
+    found = set()
+    for su in ("slice", "nodule"):
+        for f in _glob.glob(os.path.join(O, f"{DATASET}_{su}_*_seed42.npz")):
+            b = os.path.basename(f)[:-4]
+            if b.endswith("_final"):
+                continue
+            m = re.search(r"_fold\d+_(.+)_none_seed\d+$", b)
+            if m:
+                found.add(m.group(1))
+    return sorted(found)
+
+
+def name_for(stem, dataset, archs, all_archs):
+    """Output filename. Keeps the canonical literal ONLY for the full arch set on the principal
+    cohort, so the paths the manuscript embeds keep resolving; anything else is suffixed.
+
+    The names used to be literals independent of both axes, so `--archs vit_small` or
+    `--dataset lidc_binary_ge3` replaced the file the manuscript points at with different content
+    under an unchanged name. That is the same defect fixed on the evaluate side, on the other axis.
+    """
+    canonical = (dataset == "lidc_binary") and (sorted(archs) == sorted(all_archs))
+    if canonical:
+        return stem
+    parts = [stem]
+    if dataset != "lidc_binary":
+        parts.append(dataset)
+    if sorted(archs) != sorted(all_archs):
+        parts.append("+".join(sorted(archs)))
+    return "__".join(parts)
+
+
 def plot_confusion(cfg, archs, pidx, outdir, reps=(0,), fold_range=range(5),
-                   arms=("patient", "nodule", "random")):
+                   arms=("patient", "nodule", "random"), stem="confusion_matrices"):
     """One figure: a grid of 2x2 confusion matrices, architectures as rows, conditions as columns.
 
     Form chosen to match published practice and the CLAIM checklist (item 37/2020, 39/2024), which
@@ -128,7 +187,7 @@ def plot_confusion(cfg, archs, pidx, outdir, reps=(0,), fold_range=range(5),
 
     nr, nc = len(archs), len(arms)
     fig, axes = plt.subplots(nr, nc, figsize=(3.05 * nc, 3.25 * nr), squeeze=False)
-    letters = "abcdefghij"
+    letters = string.ascii_lowercase
     k = 0
     for r, a in enumerate(archs):
         for c_i, arm in enumerate(arms):
@@ -159,7 +218,7 @@ def plot_confusion(cfg, archs, pidx, outdir, reps=(0,), fold_range=range(5),
         bb = axes[r][0].get_position()
         fig.text(0.012, (bb.y0 + bb.y1) / 2, a, rotation=90, ha="left", va="center",
                  fontsize=12, fontweight="bold")
-    p = os.path.join(outdir, "confusion_matrices.png")
+    p = os.path.join(outdir, stem + ".png")
     fig.savefig(p, dpi=200); plt.close(fig)
     return {"path": p, "grid": {f"{a}|{arm}": v for (a, arm), v in grid.items() if v}}
 
@@ -189,7 +248,8 @@ def _history_band(O, arch, arm, su, reps, fold_range):
                 auc=band(auc_va), runs=len(auc_va))
 
 
-def plot_curves(cfg, archs, outdir, reps=(0,), fold_range=range(5), sample_units=("slice",)):
+def plot_curves(cfg, archs, outdir, reps=(0,), fold_range=range(5), sample_units=("slice",),
+                stem=None):
     """Learning curves for BOTH architectures in ONE figure: rows = sample unit, columns =
     architecture x metric, lettered panels.
 
@@ -210,11 +270,12 @@ def plot_curves(cfg, archs, outdir, reps=(0,), fold_range=range(5), sample_units
     archs, sus = list(archs), list(sample_units)
     colors = {"patient": "#1b7837", "random": "#c51b7d"}
     nc = 2 * len(archs)
-    fig, axes = plt.subplots(len(sus), nc, figsize=(4.9 * len(archs), 3.4 * len(sus)),
+    fig, axes = plt.subplots(len(sus), nc, figsize=(min(4.9 * len(archs), 9.8), 3.4 * len(sus)),
                              squeeze=False)
-    letters = "abcdefghijkl"
+    letters = string.ascii_lowercase
     any_found = False
     for r, su in enumerate(sus):
+        populated = []
         for c_a, arch in enumerate(archs):
             ax_l, ax_a = axes[r][2 * c_a], axes[r][2 * c_a + 1]
             found = False
@@ -241,6 +302,7 @@ def plot_curves(cfg, archs, outdir, reps=(0,), fold_range=range(5), sample_units
             if c_a == 0:
                 ax_l.set_ylabel(f"{su} level", fontsize=11, fontweight="bold")
             if found:
+                populated.append(2 * c_a + 1)
                 if r == 0 and c_a == 0:          # one legend per figure; colours are consistent
                     ax_l.legend(fontsize=7); ax_a.legend(fontsize=7)
             else:
@@ -248,17 +310,24 @@ def plot_curves(cfg, archs, outdir, reps=(0,), fold_range=range(5), sample_units
                     ax.set_xticks([]); ax.set_yticks([])
                     ax.text(0.5, 0.5, "not run", ha="center", va="center",
                             fontsize=9, transform=ax.transAxes)
-        # Share the y-range across architectures for the AUC panels only, so the two backbones are
-        # directly comparable there. NOT for loss: the two backbones sit at different loss scales,
-        # and forcing a common range squashes the flatter one into the bottom of its axis.
-        lims = [axes[r][2 * i + 1].get_ylim() for i in range(len(archs))]
-        lo, hi = min(l[0] for l in lims), max(l[1] for l in lims)
-        for i in range(len(archs)):
-            axes[r][2 * i + 1].set_ylim(lo, hi)
+        # Share the y-range across architectures for the AUC panels only, and ONLY over panels that
+        # actually received data. An empty panel -- an architecture whose runs have not landed yet --
+        # returns matplotlib's default (0.0, 1.0) from get_ylim(), which then wins the union and is
+        # pushed onto every populated panel: an AUC band of 0.09 rendered on a 0-1 axis collapses
+        # both arms into one line. Reproduced with two CNNs plus one empty transformer column.
+        # NOT shared for loss: the backbones sit at different loss scales and a common range squashes
+        # the flatter one into the bottom of its axis.
+        if populated:
+            lims = [axes[r][i].get_ylim() for i in populated]
+            lo, hi = min(l[0] for l in lims), max(l[1] for l in lims)
+            for i in populated:
+                axes[r][i].set_ylim(lo, hi)
     if not any_found:
         plt.close(fig); return None
     fig.tight_layout()
-    p = os.path.join(outdir, f"curves_{'-'.join(sus)}.png")
+    if stem is None:
+        stem = f"curves_{'-'.join(sus)}"
+    p = os.path.join(outdir, stem + ".png")
     fig.savefig(p, dpi=200); plt.close(fig)
     return p
 
@@ -266,7 +335,12 @@ def plot_curves(cfg, archs, outdir, reps=(0,), fold_range=range(5), sample_units
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--config", default="config.yaml")
-    ap.add_argument("--archs", default="densenet121,efficientnet_b0")
+    ap.add_argument("--archs", default=None,
+                    help="comma-separated. DEFAULT: every architecture found on disk for this "
+                         "dataset. It used to default to the two CNNs, which silently produced a "
+                         "two-architecture figure once a third existed -- and the freshness gate "
+                         "printed exactly that command as its remediation, so following the gate's "
+                         "own instruction made it go green over a figure missing an architecture.")
     ap.add_argument("--reps", default="0", help="comma-separated rep indices; grid S2 = 0,1,2")
     ap.add_argument("--sample-units", default="slice",
                     help="comma-separated: slice,nodule. Passing both puts one ROW per unit in the "
@@ -289,15 +363,45 @@ def main():
     outdir = os.path.join(cfg["project"]["root"], cfg["paths"]["outputs"], "figures")
     os.makedirs(outdir, exist_ok=True)
 
-    archs = [a.strip() for a in args.archs.split(",") if a.strip()]
+    present = discover_archs(cfg)
+    if args.archs:
+        archs = [a.strip() for a in args.archs.split(",") if a.strip()]
+        missing = [a for a in present if a not in archs]
+        if missing:
+            print(f"[figures] NOTE: {', '.join(missing)} have runs on disk for {DATASET} and are "
+                  f"EXCLUDED from this figure by an explicit --archs. The output name will say so.")
+    else:
+        archs = present
+        if not archs:
+            raise SystemExit(f"no runs found for dataset '{DATASET}' in outputs/probs/")
+        print(f"[figures] architectures discovered on disk: {', '.join(archs)}")
     arms = tuple(a.strip() for a in args.arms.split(",") if a.strip())
 
     # ONE confusion figure and ONE curves figure covering every architecture, rather than one file
     # per architecture. Reviewer 4 asked for the confusion matrix and only one architecture's
     # curves reached the manuscript; a per-architecture file makes that omission easy to repeat.
-    cm = plot_confusion(cfg, archs, pidx, outdir, reps=reps, arms=arms)
-    cp = plot_curves(cfg, archs, outdir, reps=reps,
-                     sample_units=[s.strip() for s in args.sample_units.split(",") if s.strip()])
+    sus = [s.strip() for s in args.sample_units.split(",") if s.strip()]
+    folds = list(range(5))
+
+    # A PARTIAL architecture must never occupy the canonical filename. Discovery finds anything with
+    # a single run on disk -- a timed probe is enough -- so without this check a figure carrying one
+    # architecture's 2 probe runs next to another's 210 would be written under the exact name
+    # manuscript.tex embeds. Completeness is counted, not assumed.
+    incomplete = []
+    for a in archs:
+        have, want = run_counts(cfg, a, arms, reps, folds, sus)
+        if have < want:
+            incomplete.append((a, have, want))
+    if incomplete:
+        for a, have, want in incomplete:
+            print(f"[figures] INCOMPLETE: {a} has {have} of {want} expected runs")
+        print("[figures] -> writing under a NON-canonical name; the manuscript's figure is untouched.")
+
+    canon_archs = present if not incomplete else None
+    cm_stem = name_for("confusion_matrices", DATASET, archs, canon_archs or [None])
+    cv_stem = name_for(f"curves_{'-'.join(sus)}", DATASET, archs, canon_archs or [None])
+    cm = plot_confusion(cfg, archs, pidx, outdir, reps=reps, arms=arms, stem=cm_stem)
+    cp = plot_curves(cfg, archs, outdir, reps=reps, sample_units=sus, stem=cv_stem)
     print(f"curves: {cp}")
 
     summary = {}
@@ -325,9 +429,11 @@ def main():
                      "protocol), so its summed CM re-scores some nodules. F1 == 2PR/(P+R) asserted "
                      "(B9). threshold 0.5, nodule level.",
             "arms": list(arms), "reps": reps, "dataset": DATASET,
+            "archs": list(archs), "archs_present_on_disk": list(present),
             "arch": summary}
-    json.dump(meta, open(os.path.join(R, "confusion_matrices.json"), "w"), indent=1)
-    print(f"wrote {os.path.join(R, 'confusion_matrices.json')} and {outdir}/*.png")
+    json_name = cm_stem + ".json"
+    json.dump(meta, open(os.path.join(R, json_name), "w"), indent=1)
+    print(f"wrote {os.path.join(R, json_name)} and {outdir}/*.png")
 
 
 if __name__ == "__main__":

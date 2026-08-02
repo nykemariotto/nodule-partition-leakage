@@ -118,7 +118,17 @@ while ($true) {
       $ci = Get-Item $cl
       $tail = @(Get-Content $cl -Tail 40 -ErrorAction SilentlyContinue)
       $epLines = @($tail | Where-Object { $_ -match "^\s*epoch\s+\d+:" })
-      $runMin = ((Get-Date) - $ci.CreationTime).TotalMinutes
+      # Elapsed comes from the grid log's START line, not from the run log's creation time. After a
+      # crash and resume the run log already exists from the earlier attempt, so its creation time
+      # is hours stale and the panel reported "9h 09m elapsed" for a run that had just begun.
+      $startLine = @(Get-Content $grid.FullName -ErrorAction SilentlyContinue |
+                     Where-Object { $_ -match ("START\s+" + [regex]::Escape($curTag) + "\s*$") }) |
+                   Select-Object -Last 1
+      $t0run = $ci.CreationTime
+      if ($startLine -and ($startLine -match "^(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})")) {
+        $t0run = [datetime]::ParseExact($Matches[1], "yyyy-MM-dd HH:mm:ss", $null)
+      }
+      $runMin = ((Get-Date) - $t0run).TotalMinutes
       Write-Host ("  in flight   {0}" -f $curTag) -ForegroundColor Yellow
       if ($epLines.Count -gt 0) {
         $last = $epLines[-1]
