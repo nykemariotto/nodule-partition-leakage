@@ -716,6 +716,20 @@ performance on this benchmark is high and similar across widely different archit
 \begin{figure*}[t]
   \centering
   \includegraphics[width=\textwidth]{curves_slice-nodule.png}
+% !!! THIS CAPTION BREAKS THE MOMENT THE FIGURE IS REGENERATED WITH A THIRD ARCHITECTURE.
+% Panel letters are assigned row-major over nc = 2 x (number of architectures), so at two
+% architectures the rows are (a--d) and (e--h), and at three they become (a--f) and (g--l). Every
+% existing panel silently changes letter; nothing in the code or in any gate detects the mismatch.
+% Six phrases below have to change together, or the caption points at the wrong panels:
+%   1. "both architectures"            -> three
+%   2. "Top row (a--d)"                -> (a--f)
+%   3. "0.905 (DenseNet-121) and 0.893 (EfficientNet-B0)"  -> add the transformer's plateau
+%   4. "Bottom row (e--h)"             -> (g--l)
+%   5. "replicates across both backbones" -> three
+%   6. "The two AUC panels in a row"   -> three
+% Fig. 2's caption does NOT break: it says "rows are architectures" and names no letters.
+% Separately, 12 places in this file assert "both architectures" / "two convolutional" /
+% "both backbones"; grep for them once the transformer is reported.
   \caption{Learning curves for both architectures, mean $\pm$ s.d.\ over the 15 runs of each arm;
   validation loss solid, training loss dashed. Top row (a--d): slice level. Under random partitioning
   (magenta) the validation loss falls with the training loss and the validation AUC climbs to
@@ -1002,6 +1016,12 @@ received the Ph.D. degree in medical physics and is currently a Professor with t
 %  [ ] REFRAMING of Introduction and the recommendation (researcher's decision, gated on D58).
 %  [ ] \gridnum — 2 remain (transformer arm, >=3 cohort). Resolve or delete, then remove the
 %      macro definition so nothing renders in red.
+%  [ ] FIG. 3 CAPTION — rewrite it in the SAME edit that regenerates the figure with the
+%      transformer. Panel letters are a function of the architecture COUNT, so (a--d)/(e--h)
+%      becomes (a--f)/(g--l) and every existing panel changes letter. Six phrases listed in a
+%      comment directly above the caption. Also grep the file for "both architectures",
+%      "two convolutional" and "both backbones" — 12 hits, all false once three are reported.
+%      Fig. 2's caption is unaffected: it names rows and columns, not letters.
 %  [ ] \pcite — currently unused, but delete the macro if it stays unused.
 %  [x] FIGURES — DONE 2026-07-28 (D65). Fig. 1 rebuilt with the third arm, real leakage rates
 %      (0.000 / 0.690 / 0.995) and the route decomposition; Fig. 2 is now the confusion-matrix GRID
