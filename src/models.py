@@ -18,6 +18,11 @@ _TIMM = {
     "inception_v3": "inception_v3",
     "swin_tiny": "swin_tiny_patch4_window7_224",
     "maxvit_tiny_tf_224": "maxvit_tiny_tf_224.in1k",
+    # ViT-S/16 replaced MaxViT-T as the second transformer before any run: it has direct
+    # LIDC-IDRI precedent where MaxViT has none, and Swin (windowed, hierarchical, quasi-
+    # convolutional) plus ViT (pure global attention) spans a far wider architectural range
+    # than two conv/attention hybrids would.
+    "vit_small": "vit_small_patch16_224.augreg_in21k_ft_in1k",
 }
 
 
@@ -28,5 +33,12 @@ def build_model(name: str, num_classes: int = 2, pretrained: bool = True):
 
 
 def input_size_for(name: str) -> int:
-    """Most timm models here accept 256; swin/maxvit are trained at 224 (we resize inputs)."""
-    return 224 if name in ("swin_tiny", "maxvit_tiny_tf_224") else 256
+    """Input size fed to the model. 256 is our preprocessing size and the default.
+
+    This list is maintained BY HAND on purpose, and must not be replaced by timm's own
+    pretrained-config size. timm reports 224 for DenseNet-121 and EfficientNet-B0 as well, but the
+    whole grid trained those at 256; deriving the size from timm would silently change the input of
+    every convolutional run and invalidate all 210 of them. Only models that genuinely cannot take
+    256 -- fixed-grid attention architectures -- are listed here.
+    """
+    return 224 if name in ("swin_tiny", "maxvit_tiny_tf_224", "vit_small") else 256
