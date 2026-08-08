@@ -36,13 +36,15 @@ alongside it as `schematic_values.csv`; the render fails rather than fall back t
 
 **Partitioning below the nodule inflates reported performance, and the inflation is not where the
 literature assumes.** At the pre-registered primary (slice) level, random partitioning raised AUC by
-**+0.064** for DenseNet-121 (95% CI +0.031 to +0.097) and **+0.082** for EfficientNet-B0
-(+0.056 to +0.108) — positive in **15 of 15** matched folds for both, and unchanged when the two arms
-are re-scored on identical test rows. Calibration degrades in parallel (log-loss +0.176 and +0.315).
+**+0.064** for DenseNet-121 (95% CI +0.031 to +0.097), **+0.082** for EfficientNet-B0
+(+0.056 to +0.108) and **+0.074** for ViT-S/16 (+0.036 to +0.112) — positive in **15 of 15** matched
+folds for every one of them, and unchanged when the two arms are re-scored on identical test rows.
+Calibration degrades in parallel (log-loss +0.176, +0.315 and +0.221).
 
 The three-arm decomposition localises it. Under the assumption that the two routes do not interact,
-**no contribution from the patient route was detected** in either architecture (the interval permits
-up to +0.046 AUC), while **within-nodule slice redundancy accounts for 92–98%** of the gap in
+**no contribution from the patient route was detected** in any of the three architectures — including
+the transformer, so the null cannot be put down to convolutional inductive bias (the interval permits
+up to +0.059 AUC) — while **within-nodule slice redundancy accounts for 81–98%** of the gap in
 log-loss and Brier. The null is measured at full sample density — 12.4 training slices per patient —
 in a cohort that does contain a patient signature to find (4 manufacturers, 18 reconstruction
 kernels, 11 slice thicknesses), so it is not a null produced by starving the model of data.
@@ -103,8 +105,8 @@ existence.
 | Table 2 — leakage gap, both levels | `scripts/audit_controls.py` | `outputs/probs/` |
 | Table 3 — three-arm route decomposition | `scripts/decompose_routes.py` | `outputs/probs/` |
 | Fig. 1 — design schematic | `paper/2_resubmission/figures/schematic.py` | `outputs/splits/`, `outputs/metadata/` |
-| Fig. 2 — confusion matrices, both architectures | `src/figures.py` | `outputs/probs/` |
-| Fig. 3 — learning curves, both architectures | `src/figures.py` | `outputs/history/` |
+| Fig. 2 — confusion matrices, all three architectures | `src/figures.py` | `outputs/probs/` |
+| Fig. 3 — learning curves, all three architectures | `src/figures.py` | `outputs/history/` |
 | Per-model tables, McNemar | `src/evaluate.py` | `outputs/probs/` |
 | Stratification / ICC analysis | `scripts/project_stratification.py`, `scripts/project_balancer.py` | `outputs/probs/`, metadata |
 | Consistency gate | `scripts/verify_grid_consistency.py` | `outputs/history/` |

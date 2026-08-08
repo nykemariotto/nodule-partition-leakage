@@ -18,4 +18,13 @@ dependencies:
       - matplotlib==3.10.9
       - PyYAML==6.0.3
       - "setuptools<80"
-      - scikit-learn==1.7.2
+      # 1.3.2, NOT 1.7.2: this file pinned 1.7.2 while requirements.txt pinned 1.3.2 and recorded
+      # 1.7.2 in its own header as a defect already corrected there. 1.3.2 is what is installed and
+      # what produced everything under outputs/. Two declared environments that disagree are worse
+      # than one, in a repository whose claim is that the results recompute.
+      - scikit-learn==1.3.2
+      # Needed by scripts/build_response_docx.py and scripts/build_highlighted.py, which build the
+      # submission documents. Neither produces a scientific result, but both are tracked here and
+      # were unrunnable from the declared environment until 2026-08-05.
+      - python-docx==1.2.0
+      - pymupdf==1.28.0
