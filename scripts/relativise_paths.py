@@ -1,7 +1,7 @@
 """Make the released partition indices portable.
 
 The `path` column of every split CSV carried an ABSOLUTE Windows path into the author's raw DICOM
-tree (`E:\\NODULES\\LIDC-IDRI\\manifest-...`). The manuscript offers these indices to reviewers as
+tree (`<local-root>\\LIDC-IDRI\\manifest-...`). The manuscript offers these indices to reviewers as
 independently executable, so a column that only resolves on one machine undercuts exactly the claim
 it is meant to support -- and it leaks the local layout into a public repository.
 

@@ -1,5 +1,5 @@
 {
- "_note": "CM counts summed over the test folds of each condition. patient- and nodule-grouped folds partition their grouping unit, so each nodule is scored once; the random condition's test folds OVERLAP by construction (leaky protocol), so its summed CM re-scores some nodules. F1 == 2PR/(P+R) asserted (B9). threshold 0.5, nodule level.",
+ "_note": "CM counts summed over ALL test folds of each condition -- 3 repeats x 5 folds. Within ONE repeat the patient- and nodule-grouped folds partition their grouping unit, so each nodule is scored once per repeat and THREE times in these totals; the earlier wording said 'scored once', which is true per repeat and wrong for the numbers reported here. The random condition's test folds OVERLAP by construction (leaky protocol), so a nodule falls in ~3.2 of the 5 folds and its totals are correspondingly larger. F1 == 2PR/(P+R) asserted (B9). threshold 0.5, nodule level.",
  "arms": [
   "patient",
   "nodule",
@@ -11,6 +11,16 @@
   2
  ],
  "dataset": "lidc_binary",
+ "archs": [
+  "densenet121",
+  "efficientnet_b0",
+  "vit_small"
+ ],
+ "archs_present_on_disk": [
+  "densenet121",
+  "efficientnet_b0",
+  "vit_small"
+ ],
  "arch": {
   "densenet121": {
    "patient": {
@@ -74,6 +84,38 @@
     "recall": 0.8983155617369804,
     "f1": 0.8919064058304564,
     "accuracy": 0.9146526137258465
+   }
+  },
+  "vit_small": {
+   "patient": {
+    "tp": 1314,
+    "tn": 2881,
+    "fp": 569,
+    "fn": 321,
+    "precision": 0.6978226234731811,
+    "recall": 0.8036697247706422,
+    "f1": 0.7470153496304719,
+    "accuracy": 0.8249754178957719
+   },
+   "nodule": {
+    "tp": 1335,
+    "tn": 2965,
+    "fp": 485,
+    "fn": 300,
+    "precision": 0.7335164835164835,
+    "recall": 0.8165137614678899,
+    "f1": 0.7727930535455861,
+    "accuracy": 0.8456243854473943
+   },
+   "random": {
+    "tp": 5789,
+    "tn": 9114,
+    "fp": 924,
+    "fn": 682,
+    "precision": 0.862356621480709,
+    "recall": 0.894606706845928,
+    "f1": 0.8781856796116505,
+    "accuracy": 0.9027197286328669
    }
   }
  }

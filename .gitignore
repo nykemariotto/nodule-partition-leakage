@@ -1,5 +1,5 @@
-# =====================================================================
-# .gitignore — versions CODE + partition indices (B7) + cohort tables + docs.
+﻿# =====================================================================
+# .gitignore â€” versions CODE + partition indices (B7) + cohort tables + docs.
 # Excludes raw data, large regenerable arrays, model weights, and mid-grid
 # volatile outputs. See data/README.md to obtain the raw datasets.
 # =====================================================================
@@ -44,7 +44,7 @@ outputs/logs/
 
 # --- committed ON PURPOSE (do NOT ignore): the executable partition indices
 #     R3 asked for (B7), the cohort/accounting tables, code, config, docs ---
-#   outputs/splits/            (partition indices — B7)
+#   outputs/splits/            (partition indices â€” B7)
 #   outputs/metadata/lidc_master.csv, lidc_nodules.csv, dataset_accounting.*
 
 # --- generated report artifacts (regenerable from source) ---
@@ -81,6 +81,9 @@ Thumbs.db
 # document that quotes them are not published. Their version record lives outside git, as the
 # date-stamped copies sync_shared.ps1 leaves in the coauthors' shared folder.
 paper/reviewer_comments.md
+# The decision letter as received. Confidential peer-review correspondence: it was
+# untracked but NOT ignored until 2026-08-05, i.e. one `git add -A` from publication.
+paper/reviewer_comments_verbatim.md
 paper/**/response_to_reviewers.md
 paper/**/Response-to-Reviewers.docx
 paper/**/Resubmission-Checklist.docx

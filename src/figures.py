@@ -47,7 +47,14 @@ import pandas as pd
 
 import matplotlib
 matplotlib.use("Agg")
+# TrueType, not matplotlib's default Type 3. Type 3 embeds each glyph as a drawing procedure; IEEE
+# production tooling expects Type 1 or TrueType, and these figures were the only Type 3 font objects
+# in the entire compiled paper.
+matplotlib.rcParams["pdf.fonttype"] = 42
+matplotlib.rcParams["ps.fonttype"] = 42
 import matplotlib.pyplot as plt
+from matplotlib.lines import Line2D          # proxy handles for the shared figure-level legend
+from matplotlib.patches import Rectangle   # confusion cells, drawn instead of rasterised
 
 # Split-file prefix, set from --dataset. "lidc_binary" = principal cohort; "lidc_binary_ge3" = the
 # >=3-annotator sensitivity cohort (D37), which carries a distinct prefix so its runs can never be
@@ -107,60 +114,63 @@ def arm_cm(cfg, arch, arm, pidx, suffix="", reps=(0,), fold_range=range(5)):
 
 ARM_LABEL = {"patient": "patient-grouped", "random": "random", "nodule": "nodule-grouped"}
 
-
-def run_counts(cfg, arch, arms, reps, folds, sus):
-    """How many of the expected (sample_unit, arm, rep, fold) cells this architecture actually has."""
-    import glob as _glob
-    O = os.path.join(cfg["project"]["root"], cfg["paths"]["outputs"], "probs")
-    have = 0
-    for su in sus:
-        for arm in arms:
-            for r in reps:
-                for k in folds:
-                    f = os.path.join(O, f"{DATASET}_{su}_{arm}_rep{r}_fold{k}_{arch}_none_seed42.npz")
-                    if os.path.exists(f):
-                        have += 1
-    return have, len(sus) * len(arms) * len(reps) * len(folds)
+# How each architecture is NAMED IN THE PAPER. The figures used to print the internal run-tag
+# identifier ("densenet121", "vit_small"), which is what the filenames and the JSON keys use, so a
+# reader comparing Fig. 3 against the text saw two different sets of names for the same three models.
+# The identifier stays the key everywhere in code and in artifacts; only the display label changes.
+DISPLAY_NAME = {"densenet121": "DenseNet-121", "efficientnet_b0": "EfficientNet-B0",
+                "vit_small": "ViT-S/16", "swin_tiny": "Swin-T", "resnet50": "ResNet-50",
+                "convnext_tiny": "ConvNeXt-T", "inception_v3": "Inception-v3",
+                "maxvit_tiny_tf_224": "MaxViT-T"}
 
 
-def discover_archs(cfg):
-    """Architectures that actually have runs on disk for DATASET, in a stable order.
+def _save(fig, outdir, stem):
+    """Write the VECTOR pdf the manuscript embeds, plus a png for looking at.
 
-    Globs are anchored on the sample unit: a bare "{DATASET}_*" also matches a LONGER dataset name,
-    since "lidc_binary" is a prefix of "lidc_binary_ge3", and the sensitivity cohort's runs would be
-    read as the principal cohort's.
+    Returns the pdf path, because that is the one \\includegraphics points at.
     """
-    import glob as _glob
-    O = os.path.join(cfg["project"]["root"], cfg["paths"]["outputs"], "probs")
-    found = set()
-    for su in ("slice", "nodule"):
-        for f in _glob.glob(os.path.join(O, f"{DATASET}_{su}_*_seed42.npz")):
-            b = os.path.basename(f)[:-4]
-            if b.endswith("_final"):
-                continue
-            m = re.search(r"_fold\d+_(.+)_none_seed\d+$", b)
-            if m:
-                found.add(m.group(1))
-    return sorted(found)
+    pdf = os.path.join(outdir, stem + ".pdf")
+    fig.savefig(pdf)                      # vector: no raster resolution at all
+    fig.savefig(os.path.join(outdir, stem + ".png"), dpi=FIG_DPI)
+    plt.close(fig)
+    return pdf
 
 
-def name_for(stem, dataset, archs, all_archs):
-    """Output filename. Keeps the canonical literal ONLY for the full arch set on the principal
-    cohort, so the paths the manuscript embeds keep resolving; anything else is suffixed.
+def display(arch: str) -> str:
+    """Paper-facing name for an architecture; falls back to the identifier if one is ever added
+    without a label, so a missing entry shows up as an odd-looking figure rather than a crash."""
+    return DISPLAY_NAME.get(arch, arch)
 
-    The names used to be literals independent of both axes, so `--archs vit_small` or
-    `--dataset lidc_binary_ge3` replaced the file the manuscript points at with different content
-    under an unchanged name. That is the same defect fixed on the evaluate side, on the other axis.
-    """
-    canonical = (dataset == "lidc_binary") and (sorted(archs) == sorted(all_archs))
-    if canonical:
-        return stem
-    parts = [stem]
-    if dataset != "lidc_binary":
-        parts.append(dataset)
-    if sorted(archs) != sorted(all_archs):
-        parts.append("+".join(sorted(archs)))
-    return "__".join(parts)
+
+# IEEE requires >300 dpi for colour/grayscale and >600 dpi for line art
+# (journals.ieeeauthorcenter.ieee.org, "Resolution and Size"). These figures ARE line art, and at
+# dpi=200 they printed at ~275 effective dpi across the two-column width -- under both thresholds.
+# So the submission copy is VECTOR pdf, which has no resolution to be under; the png is kept for
+# quick viewing and is now well above 300 dpi at print size.
+FIG_DPI = 600
+
+# IEEE Access two-column text width, inches. NOT 7.16 -- that is IEEEtran's. ieeeaccess.cls:263 sets
+# \textwidth to 177.53 mm = 503.235 pt = 6.9894 in, and this manuscript does not override it. A
+# figure drawn AT this width is not rescaled by \includegraphics[width=\textwidth], so its type
+# prints at the size it was set in. Drawing wider and letting LaTeX shrink it is what made the labels
+# small in the first place; using the WRONG width left a residual 2.4% shrink on top of the fix.
+PAGE_W = 6.9894
+
+# Height of one row of Fig. 3, inches. Sized so the WHOLE float can sit at the TOP of a page rather
+# than needing a page of its own. LaTeX allows a double-column top float up to
+# \dbltopfraction x 	extheight = 0.9 x 672 = 605 pt, and it counts the graphic BOX plus the caption:
+# at 1.85 in per row the graphic was 572 pt and the caption 107 pt = 680 pt, over the limit, so the
+# float was deferred to a page of its own -- which the \clearpage before the bibliography then
+# emitted after the acknowledgements, three pages past the text discussing it and leaving the
+# preceding page three-quarters empty. At 1.48 in the graphic is 466 pt, and 466 + 107 + separation
+# fits with ~18 pt to spare. Only the plot area shrinks; every font size is unchanged.
+ROW_H = 1.48
+
+
+
+# discover_archs / run_counts / name_for used to live here, one copy per analysis script.
+# They now live once in src/artifacts.py: keeping four copies of the same rule is how the
+# expected-cell count drifted here and nowhere else, and the drift was invisible.
 
 
 def plot_confusion(cfg, archs, pidx, outdir, reps=(0,), fold_range=range(5),
@@ -186,7 +196,11 @@ def plot_confusion(cfg, archs, pidx, outdir, reps=(0,), fold_range=range(5),
         return None
 
     nr, nc = len(archs), len(arms)
-    fig, axes = plt.subplots(nr, nc, figsize=(3.05 * nc, 3.25 * nr), squeeze=False)
+    # Drawn at the width it will PRINT at, so \includegraphics does not rescale it and the type
+    # prints at the size it is set in. At 3.05 in per column the figure was 9.15 in wide and got
+    # squeezed into 6.59 in, shrinking every label by 28%.
+    fig, axes = plt.subplots(nr, nc, figsize=(0.92 * PAGE_W, 0.92 * PAGE_W / nc * 0.98 * nr),
+                             squeeze=False)
     letters = string.ascii_lowercase
     k = 0
     for r, a in enumerate(archs):
@@ -199,10 +213,28 @@ def plot_confusion(cfg, archs, pidx, outdir, reps=(0,), fold_range=range(5),
                 k += 1
                 continue
             M = np.array([[c["tn"], c["fp"]], [c["fn"], c["tp"]]])
-            ax.imshow(M / M.sum(), cmap="Blues", vmin=0, vmax=0.6)
+            # Drawn as four filled RECTANGLES rather than with imshow. imshow embeds a raster image
+            # in the pdf -- nine of them across the grid -- which reintroduces exactly the resolution
+            # question that moving to vector output was meant to remove. Four flat colour blocks
+            # have no reason to be pixels.
+            cmap = plt.get_cmap("Blues")
             for (i, j), v in np.ndenumerate(M):
+                prop = v / M.sum()
+                fill = cmap(min(prop / 0.6, 1.0))
+                # White or black is chosen from the FILL's luminance, not from the proportion. The
+                # old rule flipped to white at prop > 0.3, where the fill is still light: three
+                # cells ended up with white digits at contrast 3.05 against a required 4.5. The
+                # break-even for this colormap is luminance 0.179 (sRGB relative luminance), which
+                # lifts the worst case from 2.44 to 4.60 measured across the whole ramp.
+                lum = sum(c * w for c, w in zip(
+                    [((x + 0.055) / 1.055) ** 2.4 if x > 0.04045 else x / 12.92 for x in fill[:3]],
+                    (0.2126, 0.7152, 0.0722)))
+                ax.add_patch(Rectangle((j - 0.5, i - 0.5), 1, 1, facecolor=fill,
+                                       edgecolor="white", linewidth=0.8, zorder=0))
                 ax.text(j, i, f"{v}", ha="center", va="center", fontsize=12,
-                        color="white" if v / M.sum() > 0.3 else "black")
+                        color="white" if lum < 0.179 else "black", zorder=1)
+            ax.set_xlim(-0.5, 1.5); ax.set_ylim(1.5, -0.5)     # row 0 on top, as imshow had it
+            ax.set_aspect("equal")
             ax.set_xticks([0, 1]); ax.set_xticklabels(["benign", "malignant"], fontsize=8)
             ax.set_yticks([0, 1]); ax.set_yticklabels(["benign", "malignant"], fontsize=8)
             if r == nr - 1:
@@ -216,10 +248,9 @@ def plot_confusion(cfg, archs, pidx, outdir, reps=(0,), fold_range=range(5),
     fig.tight_layout(rect=[0.04, 0, 1, 1])
     for r, a in enumerate(archs):
         bb = axes[r][0].get_position()
-        fig.text(0.012, (bb.y0 + bb.y1) / 2, a, rotation=90, ha="left", va="center",
-                 fontsize=12, fontweight="bold")
-    p = os.path.join(outdir, stem + ".png")
-    fig.savefig(p, dpi=200); plt.close(fig)
+        fig.text(0.012, (bb.y0 + bb.y1) / 2, display(a), rotation=90, ha="left", va="center",
+                 fontsize=11, fontweight="bold")
+    p = _save(fig, outdir, stem)
     return {"path": p, "grid": {f"{a}|{arm}": v for (a, arm), v in grid.items() if v}}
 
 
@@ -250,86 +281,128 @@ def _history_band(O, arch, arm, su, reps, fold_range):
 
 def plot_curves(cfg, archs, outdir, reps=(0,), fold_range=range(5), sample_units=("slice",),
                 stem=None):
-    """Learning curves for BOTH architectures in ONE figure: rows = sample unit, columns =
-    architecture x metric, lettered panels.
+    """Learning curves for every architecture in ONE figure.
 
-    Both architectures are shown because the claim is about a protocol, not about a model: a
-    memorisation signature that appears in one backbone and not the other would be a property of
-    that backbone. Showing both is the replication.
+    LAYOUT: one COLUMN per architecture, one ROW per (sample unit x metric). With three
+    architectures that is 3 columns and 4 rows.
 
-    With both units this figure IS the mechanism, visually (D41): at SLICE level the random arm's
-    validation loss keeps falling with training loss (the leaked val split is memorised alongside
-    it) while the patient arm's diverges upward — the honest generalisation gap. At NODULE level,
-    where within-nodule slice redundancy is eliminated by construction, that asymmetry largely
-    disappears, matching the best_epoch asymmetry (+21.5/+15.6 epochs at slice vs +5.0/+0.3 at
-    nodule) and the ~0 nodule-axis gap.
+    It used to be 2 rows x (2 x architectures) columns, which at three architectures meant SIX
+    columns drawn on a 9.8-inch canvas and then squeezed into the 7.16-inch text width -- a 27%
+    reduction that took 8 pt tick labels down to about 5.8 pt on paper. Drawing at the real print
+    width instead, with one column per architecture, gives each panel about 2.2 inches and lets the
+    type print at the size it is set in. The panel count is unchanged; only the arrangement is.
+
+    Every architecture is shown because the claim is about a protocol, not about a model: a
+    memorisation signature that appeared in one backbone and not the others would be a property of
+    that backbone. Showing all three is the replication.
+
+    With both sample units this figure IS the mechanism, visually (D41): at SLICE level the random
+    arm's validation loss keeps falling with training loss (the leaked val split is memorised
+    alongside it) while the patient arm's diverges upward -- the honest generalisation gap. At
+    NODULE level, where within-nodule slice redundancy is eliminated by construction, that asymmetry
+    largely disappears, matching the best_epoch asymmetry (+20.1/+15.5/+11.3 epochs at slice against
+    +3.8/+1.7/-0.5 at nodule) and the ~0 nodule-axis gap.
 
     NO figure-level title (IEEE Access: "Please do not include captions as part of the figures").
     """
     O = os.path.join(cfg["project"]["root"], cfg["paths"]["outputs"])
     archs, sus = list(archs), list(sample_units)
-    colors = {"patient": "#1b7837", "random": "#c51b7d"}
-    nc = 2 * len(archs)
-    fig, axes = plt.subplots(len(sus), nc, figsize=(min(4.9 * len(archs), 9.8), 3.4 * len(sus)),
-                             squeeze=False)
+    # Chosen so the two arms survive a MONOCHROME print. The previous pair, #1b7837 and #c51b7d,
+    # converts to grey 84.8 and 89.0 -- 4.2 levels out of 255 -- and the arm is carried by hue
+    # alone, because the dash pattern already means validation-versus-training. A greyscale reader
+    # could not tell the arms apart at all. This pair is 84 levels apart, both are legible as a line
+    # on white (11.4:1 and 3.8:1 against white), and they stay separated under deuteranopia and
+    # protanopia. A lighter magenta separates further but drops under 3:1, so it was rejected.
+    colors = {"patient": "#00441b", "random": "#dd4a99"}
+    rows = [(su, m) for su in sus for m in ("loss", "auc")]      # slice loss, slice AUC, nodule ...
+    nr, nc = len(rows), len(archs)
+    fig, axes = plt.subplots(nr, nc, figsize=(PAGE_W, ROW_H * nr + 0.55), squeeze=False)
     letters = string.ascii_lowercase
     any_found = False
-    for r, su in enumerate(sus):
+
+    for r, (su, metric) in enumerate(rows):
         populated = []
-        for c_a, arch in enumerate(archs):
-            ax_l, ax_a = axes[r][2 * c_a], axes[r][2 * c_a + 1]
-            found = False
-            for arm in ("patient", "random"):
-                b = _history_band(O, arch, arm, su, reps, fold_range)
-                if b is None:
+        for c, arch in enumerate(archs):
+            ax = axes[r][c]
+            b = {arm: _history_band(O, arch, arm, su, reps, fold_range)
+                 for arm in ("patient", "random")}
+            if all(v is None for v in b.values()):
+                ax.set_xticks([]); ax.set_yticks([])
+                ax.text(0.5, 0.5, "not run", ha="center", va="center", fontsize=8,
+                        transform=ax.transAxes)
+                ax.set_title(f"({letters[r * nc + c]})", fontsize=9, loc="left")
+                continue
+            any_found = True
+            populated.append(c)
+            for arm, v in b.items():
+                if v is None:
                     continue
-                found = any_found = True
-                ep = b["ep"]
-                mu, sd = b["loss_va"]
-                ax_l.plot(ep, mu, color=colors[arm], label=f"{arm} val")
-                ax_l.fill_between(ep, mu - sd, mu + sd, color=colors[arm], alpha=0.15)
-                ax_l.plot(ep, b["loss_tr"][0], color=colors[arm], ls="--", alpha=0.6,
-                          label=f"{arm} train")
-                mu, sd = b["auc"]
-                ax_a.plot(ep, mu, color=colors[arm], label=arm)
-                ax_a.fill_between(ep, mu - sd, mu + sd, color=colors[arm], alpha=0.15)
-            for j, (ax, lab) in enumerate(((ax_l, "loss"), (ax_a, "val AUC"))):
-                ax.set_xlabel("epoch", fontsize=9)
-                ax.tick_params(labelsize=8)
-                ax.set_title(f"({letters[r * nc + 2 * c_a + j]}) {arch}: {lab}", fontsize=9.5)
-            # the panel title already names the quantity, so the y-label slot of the first column
-            # carries the row label (sample unit) instead of repeating it
-            if c_a == 0:
-                ax_l.set_ylabel(f"{su} level", fontsize=11, fontweight="bold")
-            if found:
-                populated.append(2 * c_a + 1)
-                if r == 0 and c_a == 0:          # one legend per figure; colours are consistent
-                    ax_l.legend(fontsize=7); ax_a.legend(fontsize=7)
+                ep = v["ep"]
+                if metric == "loss":
+                    mu, sd = v["loss_va"]
+                    ax.plot(ep, mu, color=colors[arm], lw=1.4)
+                    ax.fill_between(ep, mu - sd, mu + sd, color=colors[arm], alpha=0.15, lw=0)
+                    ax.plot(ep, v["loss_tr"][0], color=colors[arm], ls="--", lw=1.2, alpha=0.65)
+                else:
+                    mu, sd = v["auc"]
+                    ax.plot(ep, mu, color=colors[arm], lw=1.4)
+                    ax.fill_between(ep, mu - sd, mu + sd, color=colors[arm], alpha=0.15, lw=0)
+            ax.set_title(f"({letters[r * nc + c]})", fontsize=9, loc="left")
+            ax.tick_params(labelsize=7.5, length=2.5, pad=1.5)
+            if r == nr - 1:
+                ax.set_xlabel("epoch", fontsize=8.5)
             else:
-                for ax in (ax_l, ax_a):
-                    ax.set_xticks([]); ax.set_yticks([])
-                    ax.text(0.5, 0.5, "not run", ha="center", va="center",
-                            fontsize=9, transform=ax.transAxes)
-        # Share the y-range across architectures for the AUC panels only, and ONLY over panels that
-        # actually received data. An empty panel -- an architecture whose runs have not landed yet --
-        # returns matplotlib's default (0.0, 1.0) from get_ylim(), which then wins the union and is
-        # pushed onto every populated panel: an AUC band of 0.09 rendered on a 0-1 axis collapses
-        # both arms into one line. Reproduced with two CNNs plus one empty transformer column.
-        # NOT shared for loss: the backbones sit at different loss scales and a common range squashes
-        # the flatter one into the bottom of its axis.
-        if populated:
+                ax.set_xticklabels([])
+        # Share the y-range across architectures WITHIN a row, over populated panels only. An empty
+        # panel returns matplotlib's default (0, 1) from get_ylim(), which would win the union and
+        # flatten every real curve onto a 0-1 axis. Rows are now one metric each, so sharing is safe
+        # for AUC AND for loss -- within a row the quantity is identical.
+        if populated and metric == "auc":
             lims = [axes[r][i].get_ylim() for i in populated]
             lo, hi = min(l[0] for l in lims), max(l[1] for l in lims)
             for i in populated:
                 axes[r][i].set_ylim(lo, hi)
+        # the leftmost panel of each row carries the row label; the loss scales differ between
+        # backbones, so loss rows keep their own y-range and only say what they are
+        axes[r][0].set_ylabel(f"{su} level\n{'loss' if metric == 'loss' else 'val AUC'}",
+                              fontsize=8.5, fontweight="bold")
+
     if not any_found:
         plt.close(fig); return None
-    fig.tight_layout()
+    fig.tight_layout(h_pad=0.7, w_pad=1.0)
+
+    # ONE legend for the whole figure, below the panels. Colour and line style mean the same thing
+    # in all twelve panels, so a per-panel legend is either redundant or -- as it was until
+    # 2026-08-03 -- present in two panels and absent from the other ten, which reads as though those
+    # ten are unlabelled. Keeping it outside the axes also stops it covering the curves.
+    handles = [Line2D([], [], color=colors["patient"], lw=1.6),
+               Line2D([], [], color=colors["patient"], lw=1.3, ls="--", alpha=0.65),
+               Line2D([], [], color=colors["random"], lw=1.6),
+               Line2D([], [], color=colors["random"], lw=1.3, ls="--", alpha=0.65)]
+    labels = ["patient-grouped, validation", "patient-grouped, training",
+              "random, validation", "random, training"]
+
+    fig_h = ROW_H * nr + 0.55
+    head, foot = 0.30 / fig_h, 0.26 / fig_h
+    top0, bot0 = fig.subplotpars.top, fig.subplotpars.bottom
+    fig.subplots_adjust(top=top0 - head * (top0 - bot0) - 0.004,
+                        bottom=bot0 + foot * (top0 - bot0) + 0.004)
+    # The architecture header sits above the PANEL LABEL, so its y comes from the rendered title box
+    # rather than from a guessed offset -- a guess landed on top of the labels, because the space a
+    # title occupies depends on the font and on how many rows the figure has.
+    fig.canvas.draw()
+    rend = fig.canvas.get_renderer()
+    inv = fig.transFigure.inverted()
+    for c, arch in enumerate(archs):
+        bb = axes[0][c].get_position()
+        top = inv.transform(axes[0][c].title.get_window_extent(rend)).max(axis=0)[1]
+        fig.text((bb.x0 + bb.x1) / 2, top + 0.004, display(arch), ha="center", va="bottom",
+                 fontsize=10, fontweight="bold")
+    fig.legend(handles, labels, loc="lower center", ncol=4, fontsize=8, frameon=False,
+               bbox_to_anchor=(0.5, 0.0), columnspacing=1.4, handlelength=2.2)
     if stem is None:
         stem = f"curves_{'-'.join(sus)}"
-    p = os.path.join(outdir, stem + ".png")
-    fig.savefig(p, dpi=200); plt.close(fig)
-    return p
+    return _save(fig, outdir, stem)
 
 
 def main():
@@ -363,18 +436,6 @@ def main():
     outdir = os.path.join(cfg["project"]["root"], cfg["paths"]["outputs"], "figures")
     os.makedirs(outdir, exist_ok=True)
 
-    present = discover_archs(cfg)
-    if args.archs:
-        archs = [a.strip() for a in args.archs.split(",") if a.strip()]
-        missing = [a for a in present if a not in archs]
-        if missing:
-            print(f"[figures] NOTE: {', '.join(missing)} have runs on disk for {DATASET} and are "
-                  f"EXCLUDED from this figure by an explicit --archs. The output name will say so.")
-    else:
-        archs = present
-        if not archs:
-            raise SystemExit(f"no runs found for dataset '{DATASET}' in outputs/probs/")
-        print(f"[figures] architectures discovered on disk: {', '.join(archs)}")
     arms = tuple(a.strip() for a in args.arms.split(",") if a.strip())
 
     # ONE confusion figure and ONE curves figure covering every architecture, rather than one file
@@ -383,23 +444,19 @@ def main():
     sus = [s.strip() for s in args.sample_units.split(",") if s.strip()]
     folds = list(range(5))
 
-    # A PARTIAL architecture must never occupy the canonical filename. Discovery finds anything with
-    # a single run on disk -- a timed probe is enough -- so without this check a figure carrying one
-    # architecture's 2 probe runs next to another's 210 would be written under the exact name
-    # manuscript.tex embeds. Completeness is counted, not assumed.
-    incomplete = []
-    for a in archs:
-        have, want = run_counts(cfg, a, arms, reps, folds, sus)
-        if have < want:
-            incomplete.append((a, have, want))
-    if incomplete:
-        for a, have, want in incomplete:
-            print(f"[figures] INCOMPLETE: {a} has {have} of {want} expected runs")
-        print("[figures] -> writing under a NON-canonical name; the manuscript's figure is untouched.")
+    # Which architectures, and what the file is called, are decided in src/artifacts.py -- the same
+    # rules every analysis script uses. This module had its own copies of all three (discover_archs,
+    # run_counts, name_for), and its copy counted the expected runs as a 2 x 3 cross product, so a
+    # finished architecture read as 75 of 90, no architecture was ever "complete", and the probe
+    # filter that depends on completeness never engaged. A one-run probe was drawn as a full row.
+    from src.artifacts import resolve_archs, name_for as _name_for
+    probs_dir = os.path.join(cfg["project"]["root"], cfg["paths"]["outputs"], "probs")
+    archs, present = resolve_archs(probs_dir, DATASET, args.archs,
+                                   log=lambda m: print(m.replace("[artifacts]", "[figures]")),
+                                   cells=(sus, arms, reps, folds))
 
-    canon_archs = present if not incomplete else None
-    cm_stem = name_for("confusion_matrices", DATASET, archs, canon_archs or [None])
-    cv_stem = name_for(f"curves_{'-'.join(sus)}", DATASET, archs, canon_archs or [None])
+    cm_stem = _name_for("confusion_matrices", DATASET, archs, present)
+    cv_stem = _name_for(f"curves_{'-'.join(sus)}", DATASET, archs, present)
     cm = plot_confusion(cfg, archs, pidx, outdir, reps=reps, arms=arms, stem=cm_stem)
     cp = plot_curves(cfg, archs, outdir, reps=reps, sample_units=sus, stem=cv_stem)
     print(f"curves: {cp}")
@@ -423,10 +480,13 @@ def main():
 
     R = os.path.join(cfg["project"]["root"], cfg["paths"]["outputs"], "results")
     os.makedirs(R, exist_ok=True)
-    meta = {"_note": "CM counts summed over the test folds of each condition. patient- and "
-                     "nodule-grouped folds partition their grouping unit, so each nodule is scored "
-                     "once; the random condition's test folds OVERLAP by construction (leaky "
-                     "protocol), so its summed CM re-scores some nodules. F1 == 2PR/(P+R) asserted "
+    meta = {"_note": "CM counts summed over ALL test folds of each condition -- 3 repeats x 5 folds. "
+                     "Within ONE repeat the patient- and nodule-grouped folds partition their "
+                     "grouping unit, so each nodule is scored once per repeat and THREE times in "
+                     "these totals; the earlier wording said 'scored once', which is true per repeat "
+                     "and wrong for the numbers reported here. The random condition's test folds "
+                     "OVERLAP by construction (leaky protocol), so a nodule falls in ~3.2 of the 5 "
+                     "folds and its totals are correspondingly larger. F1 == 2PR/(P+R) asserted "
                      "(B9). threshold 0.5, nodule level.",
             "arms": list(arms), "reps": reps, "dataset": DATASET,
             "archs": list(archs), "archs_present_on_disk": list(present),

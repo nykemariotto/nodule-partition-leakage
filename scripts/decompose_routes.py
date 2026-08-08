@@ -37,7 +37,7 @@ from src.metadata import load_config
 from src.datasets import load_processed_index
 from src.stats import mean_ci, rho_from_splits, wilcoxon_paired
 import audit_controls
-from audit_controls import load_arm_fold, metrics, by_nodule
+from audit_controls import load_arm_fold, metrics, by_nodule, run_tag
 
 # gap sign convention, identical to audit_controls: positive ALWAYS means "the leakier arm looks
 # better", so AUC is (leakier - cleaner) and log-loss/Brier are (cleaner - leakier).
@@ -67,6 +67,14 @@ def collect(cfg, arch, pidx, reps, folds):
                 row[f"nod_{key}"] = by_nodule(d)
                 row[f"n_test_{key}"] = len(d)
             if ok:
+                # The MEASURED training-set size, read from the committed split, exactly as
+                # audit_controls.py does. It used to be estimated as n_test x (k-1), which forces
+                # rho to 1/(k-1) = 0.25 -- so this script and audit_controls.py printed two
+                # DIFFERENT "Nadeau-Bengio 95% CI" for the identical gap on the identical folds
+                # (0.2863 vs 0.2500), and both tables in the manuscript claimed the same method.
+                tr = os.path.join(cfg["project"]["root"], cfg["paths"]["outputs"], "splits",
+                                  f"{run_tag('patient', rep, f)}_train.csv")
+                row["n_train_A"] = sum(1 for _ in open(tr)) - 1
                 out.append(row)
     return out
 
@@ -105,16 +113,35 @@ def report(rows, level, metric, cfg_label, n_test, n_train):
 def main():
     ap = argparse.ArgumentParser(description="D43 route decomposition (arms A/B/C).")
     ap.add_argument("--config", default="config.yaml")
-    ap.add_argument("--archs", default="densenet121,efficientnet_b0")
+    ap.add_argument("--archs", default=None,
+                    help="comma-separated. DEFAULT: every architecture with runs on disk.")
     ap.add_argument("--reps", default="0,1,2")
     ap.add_argument("--folds", default="0,1,2,3,4")
-    ap.add_argument("--json", default=None)
+    # Defaulting this to None meant the script PRINTED a decomposition and wrote nothing. On
+    # 2026-08-03 that put a stale two-architecture artifact in front of me while the run I had just
+    # finished existed only in the terminal scrollback. An analysis that leaves no artifact cannot
+    # be checked for freshness, so the default is now the canonical path.
+    ap.add_argument("--json", default="outputs/_analysis/decomposition.json",
+                    help="output path; the name is then derived from dataset+architectures. "
+                         "Pass an empty string to print without writing.")
     ap.add_argument("--dataset", default="lidc_binary",
                     help="split-file prefix: lidc_binary (principal) or lidc_binary_ge3 "
                          "(>=3-annotator sensitivity cohort, D37 -- never pooled)")
     args = ap.parse_args()
     # audit_controls builds the run tags, so its module-level prefix is what must change
     audit_controls.DATASET = args.dataset
+    from src.artifacts import resolve_archs, name_for as _NAME_FOR
+    _repo = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    _probs = os.path.join(_repo, "outputs", "probs")
+    _ARCHS, _PRESENT = resolve_archs(_probs, args.dataset, args.archs,
+                                     cells=(["slice"], ["patient", "random", "nodule"],
+                                            [int(x) for x in args.reps.split(",")],
+                                            list(range(5))))
+    if args.json:
+        d = os.path.dirname(args.json)
+        stem = os.path.basename(args.json)[:-5] if args.json.endswith(".json") else os.path.basename(args.json)
+        base = stem.split("__")[0].replace("_" + args.dataset, "")
+        args.json = os.path.join(d, _NAME_FOR(base, args.dataset, _ARCHS, _PRESENT) + ".json")
 
     cfg = load_config(args.config)
     pidx = load_processed_index(cfg, "none")
@@ -122,15 +149,19 @@ def main():
     folds = [int(x) for x in args.folds.split(",")]
 
     out = {}
-    for arch in args.archs.split(","):
+    for arch in _ARCHS:
         rows = collect(cfg, arch, pidx, reps, folds)
         print(f"\n=== {arch} | arms A(patient) / B(random) / C(nodule-grouped) | "
               f"{len(rows)}/{len(reps)*len(folds)} folds available ===")
         if not rows:
             print("  no complete (A,B,C) folds yet — arm C still training?")
             continue
-        n_test = int(np.mean([r["n_test_A"] for r in rows]))
-        n_train = int(np.mean([r["n_test_A"] for r in rows]) * (len(folds) - 1))
+        # Pass the PER-FOLD lists, not their means: rho is mean(n_test/n_train) across folds, and
+        # the ratio of the means is not the mean of the ratios. audit_controls.py passes the lists,
+        # so passing means here would leave the two scripts computing rho slightly differently for
+        # the same folds -- a smaller version of the defect this fix exists to remove.
+        n_test = [r["n_test_A"] for r in rows]
+        n_train = [r["n_train_A"] for r in rows]
         arch_res = {}
         for level, lname in (("slice", "SLICE level (primary, D17(i))"),
                              ("nod", "NODULE-AGGREGATED (confirmatory, D26)")):

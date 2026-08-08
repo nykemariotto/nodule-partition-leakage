@@ -30,5 +30,21 @@
     "metric_sd_current_br": 0.013263408574026978,
     "metric_sd_balanced_br": 0.012290120526704055,
     "metric_sd_pct_change_br": -7.338144202455321
+  },
+  "vit_small": {
+    "n_patients": 740,
+    "n_nodules": 1695,
+    "draws": 200,
+    "rate_sd_current": 0.02876323442068524,
+    "rate_sd_balanced": 0.0001497805274948157,
+    "metric_sd_current_auc": 0.021055190142880077,
+    "metric_sd_balanced_auc": 0.021160575105504134,
+    "metric_sd_pct_change_auc": 0.5005177436485577,
+    "metric_sd_current_ll": 0.03636833160254325,
+    "metric_sd_balanced_ll": 0.03663522682207643,
+    "metric_sd_pct_change_ll": 0.7338670974791579,
+    "metric_sd_current_br": 0.012878086262950656,
+    "metric_sd_balanced_br": 0.012938949221931985,
+    "metric_sd_pct_change_br": 0.47260872258968223
   }
 }

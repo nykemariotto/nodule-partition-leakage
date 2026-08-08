@@ -70,7 +70,9 @@ def _fold_metrics(y, p):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--config", default="config.yaml")
-    ap.add_argument("--archs", default="densenet121,efficientnet_b0")
+    ap.add_argument("--archs", default=None,
+                    help="comma-separated. DEFAULT: every architecture with runs on disk for "
+                         "this dataset. A hardcoded pair silently dropped the third one.")
     ap.add_argument("--arms", default="patient,random")
     ap.add_argument("--sample-unit", default="slice", choices=["slice", "nodule"])
     ap.add_argument("--reps", default="0")
@@ -83,8 +85,12 @@ def main():
     DATASET = args.dataset
     cfg = load_config(args.config)
     pidx = load_processed_index(cfg, "none")
-    archs = args.archs.split(","); arms = args.arms.split(",")
+    arms = args.arms.split(",")
     reps = [int(x) for x in args.reps.split(",")]; folds = [int(x) for x in args.folds.split(",")]
+    from src.artifacts import resolve_archs, name_for
+    _probs = os.path.join(cfg["project"]["root"], cfg["paths"]["outputs"], "probs")
+    archs, _present = resolve_archs(_probs, DATASET, args.archs,
+                                    cells=([args.sample_unit], arms, reps, folds))
 
     table, mcn = {}, {}
     # per-model fold-averaged metrics
@@ -107,14 +113,19 @@ def main():
                   + "  ".join(f"{m} {table[f'{arch}|{arm}'][m]['mean']:.4f}"
                               for m in ("auc", "f1", "accuracy")))
 
-    # within-arm McNemar between the two architectures on the identical test set (B5)
-    if len(archs) == 2:
+    # Within-arm McNemar between architectures on the identical test set (B5), for EVERY pair.
+    # This used to run only when exactly two architectures were present, so adding a third silently
+    # emptied the block while the manuscript still quoted the two-architecture counts. Pairs are the
+    # natural generalisation, and with three architectures they also strengthen the claim they
+    # support: that a leaked protocol flattens the differences BETWEEN models.
+    from itertools import combinations
+    for a1, a2 in combinations(archs, 2):
         for arm in arms:
             bs = []
             for rep in reps:
                 for fold in folds:
-                    ya, pa, _ = _nodule_frame(cfg, archs[0], arm, args.sample_unit, rep, fold, pidx)
-                    yb, pb, _ = _nodule_frame(cfg, archs[1], arm, args.sample_unit, rep, fold, pidx)
+                    ya, pa, _ = _nodule_frame(cfg, a1, arm, args.sample_unit, rep, fold, pidx)
+                    yb, pb, _ = _nodule_frame(cfg, a2, arm, args.sample_unit, rep, fold, pidx)
                     if ya is None or yb is None or len(ya) != len(yb) or not np.array_equal(ya, yb):
                         continue
                     bs.append(mcnemar(ya, pa, pb))
@@ -123,9 +134,10 @@ def main():
                 # get the aggregate p from the counts directly — no synthetic-vector reconstruction
                 # (which swapped b/c; code review 2026-07-21). b,c stay correctly labelled.
                 b = sum(x["b"] for x in bs); c = sum(x["c"] for x in bs)
-                mcn[arm] = mcnemar_from_counts(b, c)
-                print(f"McNemar {archs[0]} vs {archs[1]} in {arm}: b={b} c={c} "
-                      f"p={mcn[arm]['p']:.4f} ({mcn[arm]['method']})")
+                mcn[f"{a1}|{a2}|{arm}"] = mcnemar_from_counts(b, c)
+                print(f"McNemar {a1} vs {a2} in {arm}: b={b} c={c} "
+                      f"p={mcn[f'{a1}|{a2}|{arm}']['p']:.4f} "
+                      f"({mcn[f'{a1}|{a2}|{arm}']['method']})")
 
     R = os.path.join(cfg["project"]["root"], cfg["paths"]["outputs"], "results")
     os.makedirs(R, exist_ok=True)
@@ -137,7 +149,7 @@ def main():
     # sensitivity cohort's numbers under the principal cohort's name -- the D62 defect exactly,
     # fixed on the reading side but not on the writing side. The principal cohort keeps the
     # original filename so nothing that already points at it breaks.
-    name = "per_model_metrics.json" if DATASET == "lidc_binary" else f"per_model_metrics_{DATASET}.json"
+    name = name_for("per_model_metrics", DATASET, archs, _present) + ".json"
     json.dump(out, open(os.path.join(R, name), "w"), indent=1, default=str)
     print(f"wrote {os.path.join(R, name)}")
 

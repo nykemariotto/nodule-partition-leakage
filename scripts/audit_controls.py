@@ -190,7 +190,8 @@ def analyze_arch(cfg, arch, folds, suffix="", reps=(0,)):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--config", default="config.yaml")
-    ap.add_argument("--archs", default="densenet121,efficientnet_b0")
+    ap.add_argument("--archs", default=None,
+                    help="comma-separated. DEFAULT: every architecture with runs on disk.")
     ap.add_argument("--reps", default="0", help="comma-separated rep indices; grid S2 = 0,1,2 (n=15)")
     ap.add_argument("--folds", default="0,1,2,3,4")
     ap.add_argument("--probe", action="store_true", help="also run on the _final PROBE checkpoint")
@@ -203,15 +204,23 @@ def main():
     args = ap.parse_args()
     global DATASET
     DATASET = args.dataset
+    from src.artifacts import resolve_archs, name_for as _NAME_FOR
+    _repo = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    _probs = os.path.join(_repo, "outputs", "probs")
+    _ARCHS, _PRESENT = resolve_archs(_probs, DATASET, args.archs,
+                                     cells=(["slice"], ["patient", "random"],
+                                            [int(x) for x in args.reps.split(",")],
+                                            [int(x) for x in args.folds.split(",")]))
     if args.json is None:
         suffix = "" if DATASET == "lidc_binary" else f"_{DATASET}"
-        args.json = f"outputs/metrics/audit_controls{suffix}.json"
+        args.json = "outputs/metrics/" + _NAME_FOR("audit_controls", DATASET,
+                                                  _ARCHS, _PRESENT) + ".json"
     cfg = load_config(args.config)
     reps = [int(x) for x in args.reps.split(",")]
     folds = [int(x) for x in args.folds.split(",")]
 
     everything = {}
-    for arch in args.archs.split(","):
+    for arch in _ARCHS:
         for suffix, kind in ([("", "CANONICAL")] + ([("_final", "PROBE")] if args.probe else [])):
             print(f"\n=== {arch} | {kind} | from ARCHIVED probs (outputs/probs/*.npz) ===")
             r = analyze_arch(cfg, arch, folds, suffix, reps)

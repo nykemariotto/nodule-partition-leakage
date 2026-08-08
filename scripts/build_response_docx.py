@@ -3,7 +3,11 @@
 The template ships fixed slots (Reviewer#1 Concern #1-3, Reviewer#2 Concern #1-3). We have four
 reviewers with 8/8/2/7 concerns, so the slots are regenerated rather than filled -- the STRUCTURE
 the template asks for is preserved: (a) the reviewer's concern, (b) author response, (c) author
-action. Run with the `geral` env (python-docx).
+action.
+
+Run with the project's own `nodules` env, which now carries python-docx. It previously said to use
+`geral`, the ENMG project's environment: that worked but coupled this repository to an unrelated
+project's dependencies, so a change there could break a deliverable here.
 """
 import re
 import docx
@@ -40,9 +44,15 @@ def bullets_to_text(block):
 
 items = []          # (reviewer, n_within, concern, response, action)
 # numbered items: **N.M —** (a) "..."  (b) ...  (c) ...
-blocks = re.split(r"\n(?=\*\*\d+\.\d+ —)", md)
+blocks = re.split(r"\n(?=\*\*\d+\.\d+ [—-])", md)
 for b in blocks:
-    m = re.match(r"\*\*(\d+)\.(\d+) —\*\*", b)
+    # An item ENDS at the next top-level heading or horizontal rule. Without this the LAST item's
+    # "(c)" -- terminated by \Z -- swallowed everything after it into the reviewer-facing body: the
+    # change summary and the internal working section that follows it. The source file mixes both,
+    # so this boundary is what keeps the generated document to the parts meant to be sent.
+    b = re.split(r"\n(?=## |---\s*\n)", b)[0]
+    # optional title: "**3.2 — Experiment 3.**" as well as plain "**3.1 —**"
+    m = re.match(r"\*\*(\d+)\.(\d+) [—-]\s*([^*]*)\*\*", b)
     if not m:
         continue
     rev = int(m.group(1))
@@ -66,18 +76,11 @@ for b in blocks:
         act = clean(pc.group(1)) if pc else ""
     items.append((rev, int(m.group(2)), clean(pa.group(1)) if pa else "", resp, act))
 
-# Reviewer 2 is written as a bullet list -> convert each bullet into a numbered concern
-r2 = re.search(r"## Reviewer 2\n(.*?)\n## Reviewer 3", md, re.S)
-if r2:
-    bullets = re.findall(r"\n- (.*?)(?=\n- |\Z)", "\n" + r2.group(1), re.S)
-    for i, bl in enumerate(bullets, start=1):
-        parts = re.split(r"→|->", bl, maxsplit=1)
-        concern = clean(parts[0])
-        action = clean(parts[1]) if len(parts) > 1 else ""
-        items.append((2, i, concern, "", action))
+# Reviewer 2 used to be a bullet list and was special-cased here. Since
+# 2026-08-04 it is numbered (a)/(b)/(c) items like every other reviewer, so the
+# generic parser above already covers it; keeping the special case would have
+# emitted its ten concerns twice.
 
-items.sort(key=lambda x: (x[0], x[1]))
-print("parsed concerns:", {r: sum(1 for i in items if i[0] == r) for r in (1, 2, 3, 4)})
 
 # ---------------------------------------------------------------- build the document
 d = docx.Document()
@@ -165,14 +168,11 @@ para("NOTE FOR THE AUTHORS \u2014 DELETE BEFORE SUBMITTING", bold=True, colour=R
 para("This file was generated from response_to_reviewers.md. Everything above is factual and "
      "traceable to artifacts in the repository. Before submitting:", space_after=6)
 for t in [
-    "2. Rewrite the four passages that still assume a patient-level conclusion (title, abstract "
-    "ending, Conclusion, and the Discussion's \u201cMethodological implication\u201d). They must be "
-    "changed together, or the paper contradicts itself.",
-    "3. Resolve the transformer scope: run it, run it including the nodule-grouped condition, or "
-    "decline it explicitly. Concern 1.5 and Reviewer 2's SOTA item are both marked pending.",
-    "4. Run the >=3-annotator sensitivity cohort, or state that it is not included.",
-    "5. Revise the CRediT statement with the coauthors \u2014 it still describes the original study.",
-    "6. Re-read for grammar, and confirm references are in order of citation.",
+    "1. Revise the CRediT statement with the coauthors \u2014 it still describes the original study.",
+    "2. Decide the bibliography packaging: the .bib travelling with the source, or the generated "
+    ".bbl pasted inline (the original submission used hand-written \\bibitem entries).",
+    "3. Re-read for grammar, and confirm references print in order of citation.",
+    "4. Delete this page.",
 ]:
     para(t, space_after=4)
 

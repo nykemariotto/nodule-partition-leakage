@@ -49,24 +49,32 @@ ARTIFACTS = {
             (_PROBS, "python -m src.evaluate --sample-unit slice --reps 0,1,2 "
                      "--arms patient,random,nodule"),
         "results/confusion_matrices.json": (_PROBS, _FIG),
+        # the manuscript embeds the VECTOR pdf; the png is kept only for looking at
+        "figures/confusion_matrices.pdf": (_PROBS, _FIG),
+        "figures/curves_slice-nodule.pdf": (_HIST, _FIG),
         "figures/confusion_matrices.png": (_PROBS, _FIG),
         "figures/curves_slice-nodule.png": (_HIST, _FIG),
-        "_analysis/audit_controls_AFTER.json":
+        "metrics/audit_controls.json":
             ("probs/{ds}_slice_patient_*.npz;probs/{ds}_slice_random_*.npz",
-             "python scripts/audit_controls.py"),
-        "_analysis/decomposition_final.json":
-            ("probs/{ds}_slice_*_seed42.npz", "python scripts/decompose_routes.py"),
+             "python scripts/audit_controls.py --reps 0,1,2"),
+        "_analysis/decomposition.json":
+            ("probs/{ds}_slice_*_seed42.npz", "python scripts/decompose_routes.py --reps 0,1,2"),
         # superseded on purpose
         "results/stats_nodule.json": (_PROBS, None),
         "_analysis/audit_controls.json": (_PROBS, None),
+        "_analysis/audit_controls_AFTER.json": (_PROBS, None),
+        "_analysis/decomposition_final.json": (_PROBS, None),
     },
     # The sensitivity cohort has two arms and no figures of its own, so it has two artifacts.
     "lidc_binary_ge3": {
-        "results/per_model_metrics_lidc_binary_ge3.json":
+        "results/per_model_metrics__lidc_binary_ge3.json":
             (_PROBS, "python -m src.evaluate --sample-unit slice --reps 0,1,2 "
                      "--dataset lidc_binary_ge3"),
-        "metrics/audit_controls_lidc_binary_ge3.json":
+        "metrics/audit_controls__lidc_binary_ge3.json":
             (_PROBS, "python scripts/audit_controls.py --dataset lidc_binary_ge3 --reps 0,1,2"),
+        # written before src/artifacts.py fixed the naming; kept as history, never read
+        "results/per_model_metrics_lidc_binary_ge3.json": (_PROBS, None),
+        "metrics/audit_controls_lidc_binary_ge3.json": (_PROBS, None),
     },
 }
 
@@ -79,6 +87,29 @@ def _newest(outputs, patterns, ds):
             if t > newest:
                 newest, src = t, f
     return newest, src
+
+
+# The manuscript compiles from its OWN copy of each figure (graphicspath points at
+# paper/2_resubmission/figures, and must, or the Overleaf upload breaks). Nothing synchronises the
+# two, so regenerating a figure and forgetting the copy leaves the paper compiling an older picture
+# than the one the numbers were taken from -- the same staleness this gate exists to catch, one
+# directory over.
+FIGURE_COPIES = ("confusion_matrices.pdf", "curves_slice-nodule.pdf",
+                 "confusion_matrices.png", "curves_slice-nodule.png")
+PAPER_FIGS = os.path.join("paper", "2_resubmission", "figures")
+
+
+def _check_figure_copies(outputs):
+    out = []
+    for f in FIGURE_COPIES:
+        src, dst = os.path.join(outputs, "figures", f), os.path.join(ROOT, PAPER_FIGS, f)
+        if not os.path.exists(src):
+            continue
+        if not os.path.exists(dst):
+            out.append((f, None, os.path.getmtime(src)))
+        elif os.path.getmtime(dst) < os.path.getmtime(src):
+            out.append((f, os.path.getmtime(dst), os.path.getmtime(src)))
+    return out
 
 
 def main():
@@ -117,12 +148,22 @@ def main():
     for art in missing:
         print(f"absent {art} (not yet produced)")
 
+    copies = _check_figure_copies(outputs) if args.dataset == "lidc_binary" else []
+    for f, dst_t, src_t in copies:
+        where = "MISSING" if dst_t is None else f"written {stamp(dst_t)}"
+        print(f"STALE  {PAPER_FIGS}/{f}")
+        print(f"         {where}, but outputs/figures/{f} is {stamp(src_t)}")
+        print(f"         regenerate: copy outputs/figures/{f} into {PAPER_FIGS}/")
+
     n = len(table) - len(missing)
-    if stale:
-        print(f"\nFAIL: {len(stale)} of {n} artifacts are older than their inputs. Any manuscript "
-              f"number taken from them is not what the code on disk now produces.")
+    if stale or copies:
+        print(f"\nFAIL: {len(stale)} of {n} artifacts are older than their inputs"
+              + (f", and {len(copies)} manuscript figure copies are behind outputs/figures" if copies else "")
+              + ". Any manuscript number taken from them is not what the code on disk now produces.")
         raise SystemExit(1)
-    print(f"\nOK: all {n - len(superseded)} live artifacts are at least as new as their inputs.")
+    print(f"\nOK: all {n - len(superseded)} live artifacts are at least as new as their inputs"
+          + (", and the manuscript's figure copies match outputs/figures." if args.dataset == "lidc_binary"
+             else "."))
 
 
 if __name__ == "__main__":

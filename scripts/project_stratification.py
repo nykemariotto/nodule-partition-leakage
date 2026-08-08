@@ -117,11 +117,20 @@ def ci_halfwidths(vals, rho):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--config", default="config.yaml")
-    ap.add_argument("--archs", default="densenet121,efficientnet_b0")
+    ap.add_argument("--archs", default=None,
+                    help="comma-separated. DEFAULT: every architecture with runs on disk. A "
+                         "hardcoded pair silently froze this projection at two architectures.")
     ap.add_argument("--draws", type=int, default=400)
     ap.add_argument("--rho", type=float, default=0.2839, help="n_test/n_train, measured (D6)")
     ap.add_argument("--json", default="outputs/metrics/stratification_projection.json")
     args = ap.parse_args()
+    from src.artifacts import resolve_archs
+    import os as _os
+    _probs = _os.path.join(_os.path.dirname(_os.path.dirname(_os.path.abspath(__file__))),
+                           "outputs", "probs")
+    _ARCHS, _ = resolve_archs(_probs, "lidc_binary", args.archs,
+                              cells=(["slice"], ["patient", "random"], [0, 1, 2], [0, 1, 2, 3, 4]))
+    args.archs = ",".join(_ARCHS)
     cfg = load_config(args.config)
     pidx = load_processed_index(cfg, "none")
 

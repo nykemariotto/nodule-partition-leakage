@@ -122,8 +122,11 @@ def main():
     # read the principal cohort's gaps unconditionally, so running with --dataset lidc_binary_ge3
     # printed principal-cohort correlations under a >=3-cohort heading -- a cross-cohort comparison
     # that looks like a within-cohort one. It now refuses rather than mixes.
-    GAPS = {"lidc_binary": "outputs/_analysis/audit_controls_AFTER.json",
-            "lidc_binary_ge3": "outputs/metrics/audit_controls_lidc_binary_ge3.json"}
+    # These are the paths audit_controls.py WRITES today (src/artifacts.name_for). Both entries
+    # previously named files it no longer produces -- frozen two-architecture artifacts from July --
+    # so R4 would have correlated fold prevalence against gaps that predate the transformer.
+    GAPS = {"lidc_binary": "outputs/metrics/audit_controls.json",
+            "lidc_binary_ge3": "outputs/metrics/audit_controls__lidc_binary_ge3.json"}
     rel = GAPS.get(DATASET)
     p = os.path.join(cfg["project"]["root"], rel) if rel else None
     if rel is None:
