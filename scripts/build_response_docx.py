@@ -10,9 +10,23 @@ Run with the project's own `nodules` env, which now carries python-docx. It prev
 project's dependencies, so a change there could break a deliverable here.
 """
 import re
+import sys
+
 import docx
 from docx.shared import Pt, RGBColor
 from docx.enum.text import WD_ALIGN_PARAGRAPH
+
+# RETIRED 2026-08-09. A coauthor revised the .docx directly -- flat edits, no tracked changes, plus
+# 14 anchored comments -- so the .docx is now the source and this markdown is a stale derivative.
+# Running this would overwrite that revision in silence, and the loss is not confined to the
+# commented passages: the English was corrected throughout. The guard is a hard stop rather than a
+# warning because the failure is invisible until someone reads the output and notices it reads like
+# the old text.
+sys.exit(
+    "RETIRED: Response-to-Reviewers.docx is now the source, not response_to_reviewers.md.\n"
+    "Running this script would overwrite a coauthor's revision. If the markdown pipeline is ever\n"
+    "revived, first reconcile the .md against the .docx and delete this guard deliberately."
+)
 
 SRC = r"E:\NODULES\paper\2_resubmission\response_to_reviewers.md"
 OUT = r"E:\NODULES\paper\2_resubmission\Response-to-Reviewers.docx"
