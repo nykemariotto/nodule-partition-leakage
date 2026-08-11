@@ -3,10 +3,12 @@ Method schematic for the controlled THREE-ARM leakage study (IEEE Access, Access
 
 DETERMINISTIC matplotlib figure — NO randomness, NO external assets, NO network, NO generative image
 synthesis. Renders schematic.png (400 dpi) and schematic.pdf (vector). Run with the `nodules` env:
-    C:\\ProgramData\\miniconda3\\envs\\nodules\\python.exe paper/2_resubmission/figures/schematic.py
+    python paper/2_resubmission/figures/schematic.py        (environment: environment.yml)
 
-SCOPE (D65): the MAIN design only. The >=3-annotator cohort and any additional backbone are
-sensitivity analyses and belong in their own figure. Do not fold them in.
+SCOPE (D65, revised D73): the MAIN design only. The >=3-annotator cohort is a sensitivity analysis
+and belongs in its own figure; do not fold it in. The three ARCHITECTURES, however, are all part of
+the main design as of 2026-08-03 -- the transformer arm is not a sensitivity analysis -- so the
+Backbone field lists all three. swin_tiny is a one-run timing probe and must never appear here.
 
 EVERY number in this figure is READ FROM AN ARTIFACT AT RENDER TIME, never typed here:
     cohort counts          <- outputs/metadata/dataset_accounting.json
@@ -51,6 +53,10 @@ import pandas as pd
 
 import matplotlib
 matplotlib.use("Agg")
+# TrueType, not matplotlib's default Type 3 -- IEEE production tooling expects Type 1 or TrueType,
+# and the three figures were the only Type 3 font objects in the whole compiled paper.
+matplotlib.rcParams["pdf.fonttype"] = 42
+matplotlib.rcParams["ps.fonttype"] = 42
 import matplotlib.pyplot as plt
 from matplotlib.patches import Rectangle, FancyArrow
 from matplotlib.lines import Line2D
@@ -60,7 +66,7 @@ plt.rcParams.update({
     "font.sans-serif": ["Arial", "Helvetica", "DejaVu Sans"],
     "hatch.linewidth": 0.6,
 })
-# The figure is placed at 	extwidth with NO reduction, so these are the sizes that print.
+# The figure is placed at \textwidth with NO reduction, so these are the sizes that print.
 # 6.2 pt was the previous floor -- legible but at the low end of what production editors
 # accept without comment, so the scale was lifted to a 7 pt floor and the layout re-checked.
 FS_TITLE, FS_BODY, FS_TINY = 9.2, 7.7, 7.0
@@ -72,6 +78,15 @@ FIELD = "#f2f4f6"
 TRAIN = "#e6e6e6"
 TEST  = "#8d8d8d"
 LEAK  = "#d55e00"                                    # vermillion: ONLY "split across train/test"
+# A MEASURED zero rate. It stays a numeral -- these zeros are the evidence that patient grouping and
+# nodule grouping do what they claim, and a dash would say "not measured" instead of "measured and
+# found to be zero". But it is set one step lighter than the labels so the eye reaches the flagged
+# values first. The value is chosen by measurement, not taste: at 3.84:1 against white it has the
+# SAME contrast as the vermillion flagged value (3.87:1), so neither number is harder to read than
+# the other, and its greyscale value (130) is now LIGHTER than the flagged value's (119) instead of
+# darker -- so in monochrome the flagged value is both bolder and darker, rather than relying on
+# weight alone to invert an ordering the colours got backwards.
+ZERO  = "#828282"
 ARM = {"A": "#0072b2", "C": "#009e73", "B": "#cc79a7"}
 LS  = {"A": "-", "C": (0, (4, 1.5)), "B": (0, (1.2, 1.3))}
 
@@ -110,10 +125,32 @@ def measure_leakage(arm):
         raise SystemExit(f"FATAL: no split indices found for arm '{arm}' in outputs/splits/.")
     return sum(lp) / len(lp), sum(ln) / len(ln), len(lp)
 
+# IEEE Access two-column text width, inches: ieeeaccess.cls:263 sets \textwidth to 177.53 mm =
+# 503.235 pt. NOT 7.16 in, which is IEEEtran's and is what this file used to assume.
+PAGE_W = 6.9894
+
+# Output stem. Renamed from "schematic" on 2026-08-04: replacing schematic.pdf in place on Overleaf
+# repeatedly failed to take effect while the other two figures updated normally, and the compiled
+# paper kept embedding an older render. A name that has never existed in that project cannot collide
+# with a stale copy or a cached entry, so the next upload is unambiguous -- either the figure appears
+# and is necessarily the new one, or it does not appear at all.
+FIG_STEM = "fig1_design"
+
 W, H = 140.0, 100.0
 
 # vertical grid — every y in the figure comes from here, so the bands stay separated
-Y_CAP, Y_PIPE, H_PIPE = 97.5, 78.0, 17.0
+Y_CAP = 97.5
+# The pipeline row is anchored by its TOP, and its HEIGHT is computed from the longest field in the
+# row (see field_h). It used to be a fixed height of 17.0 with the body text top-anchored inside it,
+# which fitted exactly three lines and nothing more: adding ViT-S/16 as a fourth line to "Backbone"
+# pushed that line straight out through the bottom of its tint box, and left the three-line boxes
+# beside it looking top-heavy because their text hung from the top with the slack all below.
+# Anchoring the top keeps the row clear of the caption line at Y_CAP; the growth goes downward,
+# where there is slack before Y_BUS.
+Y_PIPE_TOP = 95.0
+LINE_H = 1.30                          # body line spacing, multiples of the font size
+FIELD_HEAD = 7.2                       # box top -> first body line (top pad + title + gap)
+FIELD_FOOT = 1.6                       # last body line -> box bottom
 Y_BUS, Y_RULE = 69.5, 63.0
 Y_STRIP, H_STRIP = 47.5, 4.6   # top of the strip must clear the sub-title above it
 Y_RATE_HEAD = 33.0                    # the header that says what the two rates are a fraction OF
@@ -128,13 +165,34 @@ RATE_HEAD = "Fraction of test rows that share a"
 RATE_ROW = {"pat": "patient with the training fold", "nod": "nodule with the training fold"}
 
 
-def field(ax, x, y, w, h, title, lines):
-    """A flat tint field: no border, no rounding. Grouping by tone, not by outline."""
+def _pt(size):
+    """Points -> data units. The axes span H=100 units over 5.0 inches, so one unit is 3.6 pt."""
+    return size / 3.6
+
+
+def field_h(n_lines):
+    """Height a tint field needs for `n_lines` of body text under its title, in data units."""
+    return FIELD_HEAD + (n_lines - 1) * _pt(FS_BODY * LINE_H) + _pt(FS_BODY) + FIELD_FOOT
+
+
+def field(ax, x, y, w, h, title, lines, size=None):
+    """A flat tint field: no border, no rounding. Grouping by tone, not by outline.
+
+    The body block is CENTRED in the space below the title rather than hung from the top, so fields
+    with different line counts sit level with each other in a row. Top-anchoring made a three-line
+    field look like it had drifted upward next to a four-line one.
+
+    `size` overrides the body size for a field whose content is a LIST set on one line rather than a
+    stack of short lines. It may only be one of the three sizes in the scale.
+    """
+    size = FS_BODY if size is None else size
+    assert size in (FS_TITLE, FS_BODY, FS_TINY), "one family, three sizes — nothing else (D66)"
     ax.add_patch(Rectangle((x, y), w, h, facecolor=FIELD, edgecolor="none", zorder=1))
-    ax.text(x + w / 2, y + h - 3.6, title, ha="center", va="top", fontsize=FS_TITLE,
+    ax.text(x + w / 2, y + h - 3.4, title, ha="center", va="top", fontsize=FS_TITLE,
             fontweight="bold", color=INK, zorder=3)
-    ax.text(x + w / 2, y + h - 8.6, "\n".join(lines), ha="center", va="top", fontsize=FS_BODY,
-            color=MUTED, linespacing=1.45, zorder=3)
+    zone_top, zone_bot = y + h - FIELD_HEAD + _pt(FS_BODY) / 2, y + FIELD_FOOT
+    return ax.text(x + w / 2, (zone_top + zone_bot) / 2, "\n".join(lines), ha="center", va="center",
+                   fontsize=size, color=MUTED, linespacing=LINE_H, zorder=3)
 
 
 def bracket(ax, x0, x1, y, label, hot, depth):
@@ -172,22 +230,52 @@ def main():
     for k, (lp, ln, n) in meas.items():
         print(f"  arm {k}: L_pat {lp:.4f}  L_nod {ln:.4f}  (over {n} folds)")
 
-    fig, ax = plt.subplots(figsize=(7.0, 5.0))
+    # Drawn at the IEEE two-column text width, so \includegraphics[width=\textwidth] neither
+    # enlarges nor shrinks it and the type prints at the size it is set in. Drawing wider and
+    # letting LaTeX fit it to the column is what took Figs. 2 and 3 below the 7 pt floor (D76);
+    # at 9.2 in it would put this figure's body text at 6.0 pt.
+    fig, ax = plt.subplots(figsize=(PAGE_W, 5.0))
     ax.set_xlim(0, W); ax.set_ylim(0, H); ax.axis("off")
     ax.set_position([0, 0, 1, 1])
 
     # ---- shared pipeline ----------------------------------------------------------------------
-    pw, gap = 33.0, 9.0
+    pw, gap = 39.0, 6.0
     xs = [(W - (3 * pw + 2 * gap)) / 2 + i * (pw + gap) for i in range(3)]
-    field(ax, xs[0], Y_PIPE, pw, H_PIPE, "Cohort",
-          [f"{cohort['patients']:,} patients", f"{cohort['nodules']:,} nodules",
-           f"{cohort['slices']:,} slices"])
-    field(ax, xs[1], Y_PIPE, pw, H_PIPE, "Preprocessing",
-          ["50% consensus ROI", "256 \u00d7 256 px", "identical in all arms"])
-    field(ax, xs[2], Y_PIPE, pw, H_PIPE, "Backbone",
-          ["ImageNet-pretrained", "DenseNet-121", "EfficientNet-B0"])
+    # One height for the whole row, sized by its LONGEST field, so the three tint boxes stay level
+    # and no field can overflow when a line is added to one of them.
+    #
+    # The three backbones are ONE line separated by middots, not a stack of three. A stack made the
+    # Backbone field a line taller than its neighbours and grew the whole row with it; a list reads
+    # as a list. It is set at FS_TINY because at FS_BODY the line needs 38.9 data units and would
+    # leave the row 139.5 of 140 units wide, i.e. no margin at all. FS_TINY is already one of the
+    # three sizes in the scale, so no new size is introduced.
+    pipe = [("Cohort", [f"{cohort['patients']:,} patients", f"{cohort['nodules']:,} nodules",
+                        f"{cohort['slices']:,} slices"], None),
+            ("Preprocessing", ["50% consensus ROI", "256 \u00d7 256 px", "identical in all arms"], None),
+            ("Backbone", ["ImageNet-pretrained",
+                          "DenseNet-121 \u00b7 EfficientNet-B0 \u00b7 ViT-S/16"], FS_TINY)]
+    h_pipe = field_h(max(len(lines) for _, lines, _ in pipe))
+    y_pipe = Y_PIPE_TOP - h_pipe
+    if y_pipe < Y_BUS + 4.0:
+        raise SystemExit(f"FATAL: the pipeline row needs {h_pipe:.1f} units and would reach "
+                         f"y={y_pipe:.1f}, colliding with the bus at {Y_BUS}. Shorten a field or "
+                         f"move the bands.")
+    body_texts = [field(ax, x, y_pipe, pw, h_pipe, title, lines, size)
+                  for (title, lines, size), x in zip(pipe, xs)]
+    # Does the text actually FIT the box it is in? Measured, not eyeballed. A line that overruns its
+    # tint field is the exact failure that shipped once already (D78), and it is invisible in the
+    # source: it depends on the font, the size and the string, none of which the geometry knows.
+    fig.canvas.draw()
+    rend = fig.canvas.get_renderer()
+    for t, (title, _, _) in zip(body_texts, pipe):
+        w_units = t.get_window_extent(rend).width / fig.dpi * 72 / 72 / fig.get_figwidth() * W
+        if w_units > pw - 2.0:
+            raise SystemExit(f"FATAL: the '{title}' field's text is {w_units:.1f} data units wide "
+                             f"and its box is {pw:.1f}. Widen the box, shorten the line, or drop it "
+                             f"a size — do not ship a field that overruns its tint.")
+        print(f"  field {title:14} text {w_units:5.1f} of {pw:.1f} units")
     for i in (0, 1):
-        ax.add_patch(FancyArrow(xs[i] + pw + 2.0, Y_PIPE + H_PIPE / 2, gap - 4.0, 0, width=0.25,
+        ax.add_patch(FancyArrow(xs[i] + pw + 1.2, y_pipe + h_pipe / 2, gap - 2.4, 0, width=0.25,
                                 head_width=1.5, head_length=1.6, length_includes_head=True,
                                 color=MUTED, zorder=3))
     ax.text(W / 2, Y_CAP, "Cohort, labels, preprocessing, architecture and optimiser are identical "
@@ -198,10 +286,10 @@ def main():
     cw_col, cgap = 40.0, 7.0
     cx0 = (W - (3 * cw_col + 2 * cgap)) / 2
     cols = {k: cx0 + i * (cw_col + cgap) for i, k in enumerate(("A", "C", "B"))}
-    ax.plot([W / 2, W / 2], [Y_PIPE, Y_BUS], color=HAIR, lw=0.8, zorder=1)
+    ax.plot([W / 2, W / 2], [y_pipe, Y_BUS], color=HAIR, lw=0.8, zorder=1)
     ax.plot([cols["A"] + cw_col / 2, cols["B"] + cw_col / 2], [Y_BUS, Y_BUS],
             color=HAIR, lw=0.8, zorder=1)
-    ax.text(W / 2, (Y_PIPE + Y_BUS) / 2, "the partition unit is the only thing that changes",
+    ax.text(W / 2, (y_pipe + Y_BUS) / 2, "the partition unit is the only thing that changes",
             ha="center", va="center", fontsize=FS_TINY, color=MUTED, zorder=4,
             bbox=dict(boxstyle="square,pad=0.32", fc="white", ec="none"))
 
@@ -237,22 +325,24 @@ def main():
                 fontweight="bold", color=INK)
         ax.text(x + 5.4, Y_RULE - 3.2, name, ha="left", va="top", fontsize=FS_TITLE,
                 fontweight="bold", color=INK)
-        ax.text(x + 5.4, Y_RULE - 7.8, rule, ha="left", va="top", fontsize=FS_TINY, color=MUTED)
+        # the sub-label describes the COLUMN, so it sits on the column's left edge, not on the
+        # title's indent -- the title is indented only because the panel letter precedes it
+        ax.text(x, Y_RULE - 7.8, rule, ha="left", va="top", fontsize=FS_TINY, color=MUTED)
 
-        strip(ax, x + 1.5, cw_col - 3.0, assign, NOD, PAT, lnod, lpat)
+        strip(ax, x, cw_col, assign, NOD, PAT, lnod, lpat)
 
-        ax.text(x + 1.5, Y_RATE_HEAD, RATE_HEAD, ha="left", va="center", fontsize=FS_TINY,
+        ax.text(x, Y_RATE_HEAD, RATE_HEAD, ha="left", va="center", fontsize=FS_TINY,
                 color=INK)
         y = Y_RATE
         for lab, val in rates:
-            ax.text(x + 1.5, y, lab, ha="left", va="center", fontsize=FS_TINY, color=MUTED)
+            ax.text(x, y, lab, ha="left", va="center", fontsize=FS_TINY, color=MUTED)
             hot = float(val) > 0
-            ax.text(x + cw_col - 1.5, y, val, ha="right", va="center", fontsize=FS_BODY,
+            ax.text(x + cw_col, y, val, ha="right", va="center", fontsize=FS_BODY,
                     fontweight="bold" if hot else "normal",
-                    color=LEAK if hot else MUTED)
-            ax.plot([x + 1.5, x + cw_col - 1.5], [y - 2.4, y - 2.4], color=HAIR, lw=0.5)
+                    color=LEAK if hot else ZERO)
+            ax.plot([x, x + cw_col], [y - 2.4, y - 2.4], color=HAIR, lw=0.5)
             y -= D_RATE
-        ax.text(x + 1.5, Y_NOTE, note, ha="left", va="center", fontsize=FS_TINY, color=MUTED)
+        ax.text(x, Y_NOTE, note, ha="left", va="center", fontsize=FS_TINY, color=MUTED)
 
     # ---- what the three arms buy you ------------------------------------------------------------
     ax.plot([cx0, cx0 + 3 * cw_col + 2 * cgap], [Y_SEP, Y_SEP], color=HAIR, lw=0.5)
@@ -262,25 +352,54 @@ def main():
                                     (" C \u2212 A ", "patient route"),
                                     (" B \u2212 C ", "within-nodule route"))):
         x = cx0 + i * (cw_col + cgap)
-        ax.text(x + 1.5, Y_CONTRAST, lhs, ha="left", va="center", fontsize=FS_BODY,
+        ax.text(x, Y_CONTRAST, lhs, ha="left", va="center", fontsize=FS_BODY,
                 fontweight="bold", color=INK)
-        ax.text(x + 11.0, Y_CONTRAST, rhs, ha="left", va="center", fontsize=FS_BODY, color=MUTED)
+        ax.text(x + 9.5, Y_CONTRAST, rhs, ha="left", va="center", fontsize=FS_BODY, color=MUTED)
 
     # ---- legend, unframed, on its own band -------------------------------------------------------
     handles = [
         Rectangle((0, 0), 1, 1, facecolor=TRAIN, edgecolor="none", label="training slice"),
         Rectangle((0, 0), 1, 1, facecolor=TEST, edgecolor="white", linewidth=0, hatch="///",
                   label="test slice"),
-        Line2D([0], [0], color=LEAK, lw=1.2, label="unit split across training and test"),
+        Line2D([0], [0], color=LEAK, lw=1.8, label="unit split across training and test"),
     ]
     ax.legend(handles=handles, loc="lower left", bbox_to_anchor=(cx0 / W, 0.0), ncol=3,
               frameon=False, fontsize=FS_TINY, handlelength=1.5, handleheight=0.9,
               columnspacing=2.0, labelcolor=MUTED)
 
     here = os.path.dirname(os.path.abspath(__file__))
+
+    # The SAVED page must be exactly \textwidth, so \includegraphics[width=\textwidth] neither
+    # enlarges nor shrinks it. bbox_inches="tight" crops to the ink, so the saved width is not the
+    # figsize -- it came out 7.20 in from a 7.16 in figure, and against the real 6.9894 in text width
+    # that printed the smallest type at 6.795 pt, under the 7 pt floor this figure's own rules set.
+    # So: save, measure what tight cropping actually produced, correct the figsize by that delta,
+    # and save again. Two passes, then assert. Solving it by raising the font sizes would not work --
+    # a narrower canvas holds proportionally less type, which is the same squeeze from the other end.
+    PAD = 0.02
+
+    def _produced_width():
+        """Width the saved page WILL have, in inches: the tight bbox plus the padding on each side.
+
+        Asked of matplotlib rather than read back from the pdf, because this runs in the `nodules`
+        env, which has no pdf reader -- and because get_tightbbox is what savefig itself uses, so it
+        is the same number by construction rather than by agreement.
+        """
+        fig.canvas.draw()
+        return fig.get_tightbbox(fig.canvas.get_renderer()).width + 2 * PAD
+
+    produced = _produced_width()
+    if abs(produced - PAGE_W) > 0.002:
+        fig.set_size_inches(fig.get_figwidth() - (produced - PAGE_W), fig.get_figheight())
+        produced = _produced_width()
     for ext, dpi in (("png", 400), ("pdf", None)):
-        fig.savefig(os.path.join(here, f"schematic.{ext}"), dpi=dpi,
-                    bbox_inches="tight", pad_inches=0.02)
+        fig.savefig(os.path.join(here, f"{FIG_STEM}.{ext}"), dpi=dpi,
+                    bbox_inches="tight", pad_inches=PAD)
+    print(f"  page width {produced:.4f} in against \\textwidth {PAGE_W:.4f} in "
+          f"-> placed scale {PAGE_W / produced:.5f}")
+    assert abs(produced - PAGE_W) <= 0.01, (
+        f"the saved page is {produced:.4f} in but \\textwidth is {PAGE_W:.4f} in; LaTeX would "
+        f"rescale the figure by {PAGE_W / produced:.4f} and every font size with it")
 
     # the figure ships with its own data (figure gate: "dado exportado junto")
     with open(os.path.join(here, "schematic_values.csv"), "w", newline="") as f:
@@ -291,7 +410,7 @@ def main():
         for k, (lp, ln, n) in meas.items():
             w.writerow(["L_pat (patient split)", k, f"{lp:.4f}", n, "outputs/splits/*.csv"])
             w.writerow(["L_nod (nodule split)", k, f"{ln:.4f}", n, "outputs/splits/*.csv"])
-    print("wrote schematic.png / schematic.pdf / schematic_values.csv to", here)
+    print(f"wrote {FIG_STEM}.png / {FIG_STEM}.pdf / schematic_values.csv to", here)
 
 
 if __name__ == "__main__":

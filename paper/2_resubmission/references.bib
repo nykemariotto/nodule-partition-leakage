@@ -1,20 +1,5 @@
-% =====================================================================================
-% references.bib — accumulating, SOURCE-VERIFIED bibliography for the NODULES manuscript.
-% Every entry here was checked against its PRIMARY source before being added (the project's
-% source-verify rule; \vcite = verified cite, \pcite = still-to-verify). When the manuscript is
-% ported to ieeeaccess.cls, wire this in with \bibliographystyle{IEEEtran}\bibliography{references}.
-% STATUS 2026-07-26: all 24 keys cited in manuscript.tex are now defined here. Remaining clerical
-% task = complete the "and others" author lists in the partition-unit survey block (identifiers and
-% split claims are verified; only the author lists are truncated).
-% =====================================================================================
 
-% --- Clinical on-ramp (Introduction). Verified 2026-07-23 via workflow w5d0us3bz. ---
 
-% Bray et al. 2024 (GLOBOCAN 2022). Verified at PubMed abstract (PMID 38572751) + official IARC
-% press release. Manuscript uses ROUNDED 2022 figures (~1.8M deaths, 18.7%; ~2.5M cases, 12.4%;
-% rank 1 in incidence AND mortality). Do NOT use the exact integers 2,480,675/1,817,469 (not
-% confirmable at primary source), and do NOT use the live GCO factsheet, which now shows the newer
-% GLOBOCAN 2024 cycle (2,637,005 / 1,861,839) — a different release, wrong for a 2022 citation.
 @article{bray2024,
   author  = {Bray, Freddie and Laversanne, Mathieu and Sung, Hyuna and Ferlay, Jacques and Siegel, Rebecca L. and Soerjomataram, Isabelle and Jemal, Ahmedin},
   title   = {Global cancer statistics 2022: {GLOBOCAN} estimates of incidence and mortality worldwide for 36 cancers in 185 countries},
@@ -26,10 +11,6 @@
   doi     = {10.3322/caac.21834}
 }
 
-% NLST 2011. Verified at open full text PMC4356534 + PubMed (PMID 21714641). The 20.0% is the
-% RELATIVE reduction in lung-cancer-SPECIFIC mortality vs. single-view chest RADIOGRAPHY (not vs.
-% no screening), in a high-risk cohort (age 55-74, >=30 pack-years). Do not conflate with the
-% 6.7% all-cause reduction.
 @article{aberle2011,
   author  = {{National Lung Screening Trial Research Team} and Aberle, Denise R. and Adams, Amanda M. and Berg, Christine D. and Black, William C. and Clapp, Jonathan D. and Fagerstrom, Richard M. and Gareen, Ilana F. and Gatsonis, Constantine and Marcus, Pamela M. and Sicks, JoRean D.},
   title   = {Reduced lung-cancer mortality with low-dose computed tomographic screening},
@@ -41,11 +22,6 @@
   doi     = {10.1056/NEJMoa1102873}
 }
 
-% Fleischner Society 2017 (MacMahon et al.). Verified at hosted PDF of the published article
-% (exact title/15 authors/DOI match) + PubMed (PMID 28240562). Attribute risk figures as
-% GUIDELINE/CONSENSUS estimates (ACCP-graded), applicable to incidental nodules in adults >=35 y
-% (excludes screening/known-cancer/immunocompromised). The 1% risk threshold is author-stated as
-% "necessarily arbitrary".
 @article{macmahon2017,
   author  = {MacMahon, Heber and Naidich, David P. and Goo, Jin Mo and Lee, Kyung Soo and Leung, Ann N. C. and Mayo, John R. and Mehta, Atul C. and Ohno, Yoshiharu and Powell, Charles A. and Prokop, Mathias and Rubin, Geoffrey D. and Schaefer-Prokop, Cornelia M. and Travis, William D. and Van Schil, Paul E. and Bankier, Alexander A.},
   title   = {Guidelines for management of incidental pulmonary nodules detected on {CT} images: From the {Fleischner Society} 2017},
@@ -57,20 +33,7 @@
   doi     = {10.1148/radiol.2017161659}
 }
 
-% =====================================================================================
-% --- Related Work: partition-unit survey (Section II). Assembled 2026-07-23 via three
-% synchronous methods-section reads (agents; see DECISIONS D40). For EACH entry the
-% partition unit was taken from the paper's OWN METHODS text with the verbatim quote
-% recorded below; "inaccessible" (paywalled) papers are excluded from the tally. These
-% are a PURPOSIVE, non-systematic sample to characterise reporting practice.
-% CLERICAL TODO before submission: complete the full author lists from each DOI/arXiv id
-% ("and others" = et al. placeholder where the survey captured only the lead author);
-% the split CLAIMS and identifiers are verified, the author-list completion is mechanical.
-% =====================================================================================
 
-% PATIENT-level (leakage-controlled). Quote: "there were no shared patients between the two ... sets".
-% Full 7-author list, Crossref + PubMed (PMID 32409715), byline order identical in both.
-% CORRECTED 2026-07-26: our earlier partial list had Mohammadi 2nd; he is LAST (7th).
 @article{mcn2020,
   author  = {Afshar, Parnian and Oikonomou, Anastasia and Naderkhani, Farnoosh and Tyrrell, Pascal N. and Plataniotis, Konstantinos N. and Farahani, Keyvan and Mohammadi, Arash},
   title   = {{3D-MCN}: A {3D} multi-scale capsule network for lung nodule malignancy prediction},
@@ -80,8 +43,6 @@
   year    = {2020},
   doi     = {10.1038/s41598-020-64824-5}
 }
-% PATIENT-level (LUNA16 patient-level 10-fold). Quote: "LUNA16's dataset split principle of 10-fold
-% cross-validation of patient level data".
 @article{cmixnet2019,
   author  = {Nasrullah, Nasrullah and Sang, Jun and Alam, Mohammad S. and Mateen, Muhammad and Cai, Bin and Hu, Haibo},
   title   = {Automated lung nodule detection and classification using deep learning combined with multiple strategies},
@@ -92,7 +53,6 @@
   year    = {2019},
   doi     = {10.3390/s19173722}
 }
-% PATIENT-level. Quote: "Our patient-level stratified split yields 5187 training samples ...".
 @misc{mase2025,
   author = {Saha, Utathya and Prakash, Surya},
   title  = {Multi-attention stacked ensemble for lung cancer detection in {CT} scans},
@@ -100,8 +60,6 @@
   note   = {arXiv:2507.20221},
   url    = {https://arxiv.org/abs/2507.20221}
 }
-% NODULE-level (reference pipeline reused by the Al-Shabi cluster). Quote: "the sum of the 406
-% malignant and 442 benign nodules where randomly divided into 10 exclusive partitions".
 @article{alshabi2019gated,
   author  = {Al-Shabi, Mundher and Lee, Hwee Kuan and Tan, Maxine},
   title   = {Gated-dilated networks for lung nodule classification in {CT} scans},
@@ -111,9 +69,6 @@
   year    = {2019},
   doi     = {10.1109/ACCESS.2019.2958663}
 }
-% NODULE-level (random 980/246 split). Quote: "1,226 lung nodules ... randomly divided into two
-% subsets for training (980 nodules) and independent testing (246 nodules)".
-% 8 authors, arXiv API. NO published version (checked Crossref, Semantic Scholar, DBLP) -> preprint.
 @misc{contrastdiag2024,
   author = {Wang, Chenglong and Yi, Yinqiao and Wang, Yida and Zhang, Chengxiu and Liu, Yun and Mori, Kensaku and Yuan, Mei and Yang, Guang},
   title  = {{ContrastDiagnosis}: Enhancing interpretability in lung nodule diagnosis using contrastive learning},
@@ -121,11 +76,6 @@
   note   = {arXiv:2403.05280},
   url    = {https://arxiv.org/abs/2403.05280}
 }
-% NODULE-level (split by nodule ID on LUNA16, ignoring its official patient-level split). Quote:
-% "We divided the data into test, train, and validation sets based on nodule ID".
-% 4 authors, arXiv API. Byline ORDER CHANGED between versions: this is v2 (updated 2025-11-26),
-% the current one. v1 order was Madhuri, Sobir, Mamun, Hasan -- secondary indexes still show v1.
-% NO published version (Crossref, DBLP checked) -> preprint.
 @misc{lmlcc2025,
   author = {Mamun, Tasnia Binte and Madhuri, Adhora and Sobir, Nusaiba and Hasan, Taufiq},
   title  = {{LMLCC-Net}: A semi-supervised deep learning model for lung nodule malignancy prediction from {CT} scans},
@@ -133,7 +83,6 @@
   note   = {arXiv:2505.06370},
   url    = {https://arxiv.org/abs/2505.06370}
 }
-% RANDOM / unit-UNSPECIFIED. Quote: "10-fold cross-validation" with no partition-unit statement.
 @article{alshabi2019lg,
   author  = {Al-Shabi, Mundher and Lan, Boon Leong and Chan, Wai Yee and Ng, Kwan-Hoong and Tan, Maxine},
   title   = {Lung nodule classification using deep local--global networks},
@@ -144,8 +93,6 @@
   year    = {2019},
   doi     = {10.1007/s11548-019-01981-7}
 }
-% RANDOM / unit-UNSPECIFIED. Quote: "a 10-fold cross-validation method, in which 9 folds were used
-% for training and one fold for testing" (unit not stated).
 @article{procan2021,
   author  = {Al-Shabi, Mundher and Shak, Kelvin and Tan, Maxine},
   title   = {{ProCAN}: Progressive growing channel attentive non-local network for lung nodule classification},
@@ -155,7 +102,6 @@
   year    = {2022},
   doi     = {10.1016/j.patcog.2021.108309}
 }
-% RANDOM / unit-UNSPECIFIED. Quote: "10-fold cross-validation was used to obtain the Acc".
 @article{xiao2020ens,
   author  = {Xiao, Nan and Qiang, Yan and Bilal Zia, Muhammad and Wang, Sanhu and Lian, Jianhong},
   title   = {Ensemble classification for predicting the malignancy level of pulmonary nodules on chest computed tomography images},
@@ -166,8 +112,6 @@
   year    = {2020},
   doi     = {10.3892/ol.2020.11576}
 }
-% NO split description (section titled "splitting" gives only per-set counts, no procedure/unit).
-% 4 authors, Crossref (published 2024-05-16).
 @article{attnpyramid2024,
   author  = {Wang, Hongfeng and Zhu, Hai and Ding, Lihua and Yang, Kaili},
   title   = {Attention pyramid pooling network for artificial diagnosis on pulmonary nodules},
@@ -178,12 +122,6 @@
   year    = {2024},
   doi     = {10.1371/journal.pone.0302641}
 }
-% Field-level CRITIQUE. Quote: studies "rarely provide the exact details about either the sample
-% selection process or the final dataset".
-% UPGRADED to the PUBLISHED version 2026-07-26 (was cited as arXiv:2108.05386). Peer-reviewed at
-% PRIME 2021, held with MICCAI 2021; the arXiv comment field confirms acceptance. 9 authors.
-% NAME CARE: Crossref mis-splits "Loic Le Folgoc" as given="Loic Le" / family="Folgoc" -- the
-% braces below keep the particle attached to the surname.
 @inproceedings{pitfalls2021,
   author    = {Baltatzis, Vasileios and Bintsi, Kyriaki-Margarita and {Le Folgoc}, Lo{\"i}c and Martinez Manzanera, Octavio E. and Ellis, Sam and Nair, Arjun and Desai, Sujal and Glocker, Ben and Schnabel, Julia A.},
   title     = {The Pitfalls of Sample Selection: A Case Study on Lung Nodule Classification},
@@ -196,17 +134,36 @@
   doi       = {10.1007/978-3-030-87602-9_19}
 }
 
-% =====================================================================================
-% --- Core references, source-verified 2026-07-26 (Crossref publisher deposits as
-% authoritative, cross-checked against OpenAlex / PubMed / DBLP / publisher pages).
-% =====================================================================================
 
-% 56 authors per Crossref/OpenAlex (PubMed lists only 55 -- it drops Laurence P. Clarke -- and has
-% name typos). DELIBERATELY TRUNCATED, see the "author-list policy" note at the end of this file:
-% IEEEtran.bst does NOT truncate by default, and IEEE Access printed this very reference as
-% "S. G. Armato, III, et al." Braces on {Armato III} attach the suffix to the surname, which gives
-% "S. G. Armato III" with no comma -- the IEEE Reference Guide V3.28.2025 rule (the 2018 rule,
-% which put commas around Jr./Sr./III, was reversed).
+@inproceedings{huang2017densenet,
+  author    = {Huang, Gao and Liu, Zhuang and Van Der Maaten, Laurens and Weinberger, Kilian Q.},
+  title     = {Densely Connected Convolutional Networks},
+  booktitle = {2017 {IEEE} Conference on Computer Vision and Pattern Recognition ({CVPR})},
+  pages     = {2261--2269},
+  publisher = {IEEE},
+  year      = {2017},
+  doi       = {10.1109/CVPR.2017.243}
+}
+
+@inproceedings{tan2019efficientnet,
+  author    = {Tan, Mingxing and Le, Quoc},
+  title     = {{EfficientNet}: Rethinking Model Scaling for Convolutional Neural Networks},
+  booktitle = {Proceedings of the 36th International Conference on Machine Learning},
+  series    = {Proceedings of Machine Learning Research},
+  volume    = {97},
+  pages     = {6105--6114},
+  publisher = {PMLR},
+  year      = {2019}
+}
+
+@inproceedings{dosovitskiy2021vit,
+  author    = {Dosovitskiy, Alexey and Beyer, Lucas and Kolesnikov, Alexander and Weissenborn, Dirk and Zhai, Xiaohua and Unterthiner, Thomas and Dehghani, Mostafa and Minderer, Matthias and Heigold, Georg and Gelly, Sylvain and Uszkoreit, Jakob and Houlsby, Neil},
+  title     = {An Image is Worth 16x16 Words: Transformers for Image Recognition at Scale},
+  booktitle = {International Conference on Learning Representations ({ICLR})},
+  year      = {2021}
+}
+
+
 @article{armato2011,
   author  = {Samuel G. {Armato III} and others},
   title   = {The Lung Image Database Consortium ({LIDC}) and Image Database Resource Initiative ({IDRI}): A completed reference database of lung nodules on {CT} scans},
@@ -218,10 +175,6 @@
   doi     = {10.1118/1.3528204}
 }
 
-% Cited for the pylidc library. VERIFIED as the correct citation: pylidc is announced in
-% this paper's Appendix by the same author, and the library has NO DOI, Zenodo record or
-% CITATION file of its own. The paper's own subject is malignancy classification, so keep
-% the URL in the text so readers see it is a software citation.
 @article{hancock2016,
   author  = {Hancock, Matthew C. and Magnan, Jerry F.},
   title   = {Lung nodule malignancy classification using only radiologist-quantified image features as inputs to statistical learning algorithms: probing the {Lung Image Database Consortium} dataset with two statistical learning methods},
@@ -234,16 +187,6 @@
   note    = {Describes the pylidc library in its Appendix; \url{https://pylidc.github.io/}}
 }
 
-% VERIFIED IN THE FULL TEXT 2026-07-26 (researcher supplied the PDF; earlier caveat WITHDRAWN).
-% Kubota et al. do state the criterion, three times:
-%   p.145-146: "From multiple of segmentations, we construct single reference segmentation as
-%              voxels that are included in at least 50% of the available segmentations."
-%   Fig. 12  : "The reference segmentation is obtained by the 50% (or majority) rule."
-%   Fig. 14  : "Reference segmentation obtained by the 50% rule."
-% WORDING NOTE: the paper never uses the word "consensus" (0 occurrences); it says "50% rule" or
-% "majority rule". The manuscript therefore attributes the "50% rule" to Kubota and reserves
-% "consensus" for pylidc's API name, so no term is put in the source's mouth.
-% Roles in the text: kubota2011 = the convention; hancock2016 (pylidc) = the implementation.
 @article{kubota2011,
   author  = {Kubota, Toshiro and Jerebko, Anna K. and Dewan, Maneesh and Salganicoff, Marcos and Krishnan, Arun},
   title   = {Segmentation of pulmonary nodules of various densities with morphological approaches and convexity models},
@@ -255,8 +198,6 @@
   doi     = {10.1016/j.media.2010.08.005}
 }
 
-% TKDD 2012 journal version (4 authors). NOT the earlier KDD'11 conference version, which
-% has 3 authors and a different DOI (10.1145/2020408.2020496).
 @article{kaufman2012,
   author    = {Kaufman, Shachar and Rosset, Saharon and Perlich, Claudia and Stitelman, Ori},
   title     = {Leakage in data mining: Formulation, detection, and avoidance},
@@ -280,12 +221,6 @@
   doi     = {10.1016/j.media.2020.101694}
 }
 
-% FULL LIST, and that is EVIDENCE-BASED, not an oversight (revised 2026-07-26): this exact
-% reference was found rendered SIX times in published IEEE Access articles, and every one prints
-% the full list -- never "et al.". One of them keeps the consortium inline
-% ("M. Roberts, AIX-COVNET, D. Driggs, ..."; IEEE Access vol. 9, doi 10.1109/ACCESS.2021.3079716).
-% So this is the one long-byline reference where observed practice is NOT to truncate.
-% {AIX-COVNET} is braced so BibTeX cannot parse the consortium as a personal name.
 @article{roberts2021,
   author  = {Roberts, Michael and Driggs, Derek and Thorpe, Matthew and Gilbey, Julian and Yeung, Michael and Ursprung, Stephan and Aviles-Rivero, Angelica I. and Etmann, Christian and McCague, Cathal and Beer, Lucian and Weir-McCall, Jonathan R. and Teng, Zhongzhao and Gkrania-Klotsas, Effrossyni and {AIX-COVNET} and Rudd, James H. F. and Sala, Evis and Sch{\"o}nlieb, Carola-Bibiane},
   title   = {Common pitfalls and recommendations for using machine learning to detect and prognosticate for {COVID}-19 using chest radiographs and {CT} scans},
@@ -297,10 +232,6 @@
   doi     = {10.1038/s42256-021-00307-0}
 }
 
-% FULL 26-author list, verified at Crossref. Kept in full for UNIFORMITY with roberts2021
-% (researcher's call, 2026-07-26): no IEEE rendering of this specific reference was ever found, so
-% there was no observed practice to follow, and full listing is well within what IEEE Access
-% demonstrably prints (2,793 references with >=7 authors printed in full, longest observed 22).
 @article{pedrosa2021,
   author  = {Pedrosa, Jo{\~a}o and Aresta, Guilherme and Ferreira, Carlos and Atwal, Gurraj and Phoulady, Hady Ahmady and Chen, Xiaoyu and Chen, Rongzhen and Li, Jiaoliang and Wang, Liansheng and Galdran, Adrian and Bouchachia, Hamid and Kaluva, Krishna Chaitanya and Vaidhya, Kiran and Chunduru, Abhijith and Tarai, Sambit and Nadimpalli, Sai Prasad Pranav and Vaidya, Suthirth and Kim, Ildoo and Rassadin, Alexandr and Tian, Zhenhuan and Sun, Zhongwei and Jia, Yizhuan and Men, Xuejun and Ramos, Isabel and Cunha, Ant{\'o}nio and Campilho, Aur{\'e}lio},
   title   = {{LNDb} challenge on automatic lung cancer patient management},
@@ -322,8 +253,6 @@
   doi     = {10.1023/A:1024068626366}
 }
 
-% Published version: SIX authors (the SSRN preprint had five). Published AUC is 0.985 --
-% the 0.988 that appeared in our draft came from the preprint and was corrected 2026-07-26.
 @article{jin2025,
   author  = {Jin, Haizhe and Yu, Cheng and Zhang, Jiahao and Zheng, Renjie and Fu, Yongyan and Zhao, Yinan},
   title   = {Multitask {S}win {T}ransformer for classification and characterization of pulmonary nodules in {CT} images},
@@ -346,54 +275,3 @@
   doi       = {10.1007/s10791-026-09931-z}
 }
 
-% =====================================================================================
-% AUTHOR-LIST POLICY (decided 2026-07-26 from retrieved evidence, not assumption)
-% =====================================================================================
-% RULE ADOPTED: full author lists everywhere, with exactly ONE exception:
-%   armato2011  (56 authors) -- TRUNCATED to "Samuel G. {Armato III} and others", on direct
-%                               observed evidence: this reference was found rendered 3 times in
-%                               IEEE journals and every one reads "S. G. Armato, III, et al."
-%   roberts2021 (54 byline entries) -- FULL. Six observed IEEE Access renderings of this exact
-%                               reference all print the complete list, consortium inline.
-%   pedrosa2021 (26 authors) -- FULL, for uniformity (researcher's call). No rendering of this
-%                               reference exists in the corpus, so there was no observed practice
-%                               to follow, and 26 names is close to the 22 IEEE Access is
-%                               documented to print in full.
-% PRINCIPLE: follow OBSERVED practice where a rendering of that specific reference exists; where
-% none exists, prefer the full list. Only armato2011 has observed evidence for truncating, so only
-% armato2011 is truncated. A copyeditor may re-normalise any of this at production.
-%
-% WHY, in order of evidential weight:
-% 1. IEEEtran.bst DOES NOT TRUNCATE BY DEFAULT. Read at source (v1.14, CTAN):
-%    default.is.forced.et.al = #0, so the truncation branch never fires and the
-%    max-names value (#10) is inert. Put 56 names in the .bib and the submitted PDF
-%    prints 56 names. Truncation must therefore be done in the .bib or via a
-%    IEEEtranBSTCTL entry -- it does not happen by itself. (No at-sign appears anywhere in these
-%    notes, on purpose: BibTeX scans for an at-sign to begin an entry and does NOT honour "%" as a
-%    comment character, so an at-sign inside a note is parsed as a malformed entry. An earlier
-%    version of this very note wrote the character out to explain the rule and produced three
-%    BibTeX errors per compile -- visible in output.blg as "You're missing an entry type".)
-% 2. WRITTEN IEEE RULE (IEEE Reference Guide V3.28.2025, ieeeauthorcenter.ieee.org):
-%    "IEEE publications must list names of all authors, up to six names. If there are
-%    more than six names listed, use the primary author's name followed by 'et al.'"
-%    Note: FIRST AUTHOR ONLY + et al., not first-six-then-et-al.
-% 3. OBSERVED IEEE ACCESS PRACTICE, from a corpus of 17,922 reference entries harvested
-%    from 292 IEEE Access articles (publisher-deposited JATS via Europe PMC) plus 283
-%    references read off three genuine IEEE-typeset PDFs:
-%      - Only TWO forms exist in production: the full list, or ONE name + "et al."
-%        There is NO first-N-then-et-al form. Of 274 "et al." references, 269 (98.2%)
-%        carry exactly one name; the 5 exceptions sit in two articles whose bibliographies
-%        were visibly never copyedited into IEEE style.
-%      - The six-name cap is NOT enforced: 2,793 references print >=7 authors in full,
-%        the longest observed being 22 names. So a full list in the .bib is printed as-is.
-%      - armato2011 specifically was found rendered 3 times, ALWAYS as
-%        "S. G. Armato, III, et al." -> we truncate it.
-%      - roberts2021 specifically was found rendered 6 times, ALWAYS in full -> we do not.
-%    This is why the policy is per-reference rather than a blanket cap.
-% ALTERNATIVE, if a global style-driven rule is ever preferred: keep every name in the
-% .bib and add an IEEEtranBSTCTL entry with CTLuse_forced_etal="yes", CTLmax_names_forced_etal="6",
-% CTLnames_show_etal="1"} with \bstctlcite after \begin{document}. That matches the WRITTEN
-% rule exactly but is more aggressive than observed practice -- it would also collapse the
-% 7-16-author references that IEEE Access actually printed in full.
-% Either way a copyeditor may re-normalise at production; the choice above has the
-% advantage that the SUBMITTED pdf already matches the published form.
