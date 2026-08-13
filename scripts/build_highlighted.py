@@ -58,33 +58,43 @@ def rebuild_extent():
 # anchor phrase -> which reviewer concern(s) it answers. Anchors are short and distinctive so the
 # search does not straddle a line break; PyMuPDF matches across lines but short anchors are safer.
 ANCHORS = [
-    ("The experiment is a matched comparison of three arms",      "R1.1, R3.1 - controlled experiment replaces the literature comparison"),
-    ("Why the third arm",                                          "R3.1 - isolates which route produces the inflation"),
-    ("Matched-rows control",                                       "R3.1 - the gap is not a test-set artefact"),
-    ("design is repeated over R = 3 repeats",                     "R1.2 - repeated cross-validation, several seeds"),
+    # Labels are written out in full and use the same wording as the response document
+    # ("Reviewer #N, Concern # M"), because "R2.1" is our shorthand and a reviewer has no reason to
+    # decode it. Each one names the item it answers, so the reader can go straight to it there.
+    ("The experiment is a matched comparison of three arms",      "Reviewer 1 Concern 1; Reviewer 3 Concern 1 - controlled experiment replaces the literature comparison"),
+    ("Why the third arm",                                          "Reviewer 3 Concern 1 - isolates which route produces the inflation"),
+    ("Matched-rows control",                                       "Reviewer 3 Concern 1 - the gap is not a test-set artifact"),
+    ("design is repeated over R = 3 repeats",                     "Reviewer 1 Concern 2 - repeated cross-validation, several seeds"),
     # Anchor was "Nadeau-Bengio correction" and it stopped matching on the 2026-08-05 recompile:
     # the line broke inside the compound ("Nadeau-\nBengio correction"), and locate() cannot rescue
     # a two-word anchor because its shortening floor is min(3, len(words)) -- there is nothing to
     # trim. Anchored on a longer, hyphen-free run in the same sentence instead.
-    ("Because cross-validation fold estimates",                "R1.3 - corrected confidence intervals"),
-    ("exact attainable minimum",                                   "R1.3 - significance test with its floor stated"),
-    ("Preprocessing is identical across all",                      "R1.4 - preprocessing cannot confound the contrast"),
-    ("Architecture dependence",                                    "R1.5 - scope of architecture coverage stated explicitly"),
-    ("external, multi-institutional validation",                   "R1.6 - external validation declared out of scope"),
-    ("All metrics reported in this paper are computed on the",     "R1.7, R3.2 - no result is reported on a validation split"),
-    ("Why the partition unit, and not stratification",             "R1.8 - variance is driven by case composition, not class balance"),
-    ("Related work",                                               "R2 - the missing related-work section"),
-    ("Formalising the leakage",                                    "R2 - the mechanism stated as formulae"),
-    ("Acquisition characteristics",                                "R2, R3.2 - dataset detail and the acquisition channel"),
-    ("Counting (annotation vs. nodule)",                           "R3.2 - annotation and nodule counts reported separately"),
-    ("Patient grouping",                                           "R3.2 - zero patient overlap asserted and exported"),
-    ("Label definition",                                           "R3.2 - how multiple scores become one label"),
-    ("Reproducibility and integrity safeguards",                   "R3.2 - numerical inconsistencies cannot recur"),
-    ("Which route produces the inflation",                         "R3.1 - the three-arm result"),
-    ("2D backbones on volumetric CT",                              "R4.3 - the 2D-for-3D limitation"),
-    ("high-agreement subcohort",                                   "R4.4 - label-noise sensitivity analysis"),
-    ("Learning dynamics",                                          "R4.5 - training and validation curves"),
-    ("nodule-level confusion matrices",                            "R4.6 - confusion matrices provided"),
+    ("Because cross-validation fold estimates",                "Reviewer 1 Concern 3 - corrected confidence intervals"),
+    ("exact attainable minimum",                                   "Reviewer 1 Concern 3 - significance test with its floor stated"),
+    ("Preprocessing is identical across all",                      "Reviewer 1 Concern 4 - preprocessing cannot confound the contrast"),
+    ("Architecture dependence",                                    "Reviewer 1 Concern 5 - scope of architecture coverage stated explicitly"),
+    ("external, multi-institutional validation",                   "Reviewer 1 Concern 6 - external validation declared out of scope"),
+    ("All metrics reported in this paper are computed on the",     "Reviewer 1 Concern 7; Reviewer 3 Concern 2 - no result is reported on a validation split"),
+    ("Why the partition unit, and not stratification",             "Reviewer 1 Concern 8 - variance is driven by case composition, not class balance"),
+    ("Related work",                                               "Reviewer 2 Concern 4 - the missing related-work section"),
+    ("Formalizing the leakage",                                    "Reviewer 2 Concern 5 - the mechanism stated as formulae"),
+    ("Acquisition characteristics",                                "Reviewer 2 Concern 9; Reviewer 3 Concern 2 - dataset detail and the acquisition channel"),
+    ("Counting (annotation vs. nodule)",                           "Reviewer 3 Concern 2 - annotation and nodule counts reported separately"),
+    ("Patient grouping",                                           "Reviewer 3 Concern 2 - zero patient overlap asserted and exported"),
+    ("Label definition",                                           "Reviewer 3 Concern 2 - how multiple scores become one label"),
+    ("Reproducibility and integrity safeguards",                   "Reviewer 3 Concern 2 - numerical inconsistencies cannot recur"),
+    ("Which route produces the inflation",                         "Reviewer 3 Concern 1 - the three-arm result"),
+    # The three declared changes of scope. They answer no single concern -- they are consequences of
+    # the rebuild that we state rather than let a reviewer discover -- but they are the most
+    # consequential edits in the document and were not marked at all until 2026-08-11.
+    ("removed the three-scenario comparison",                      "Scope: the three scenarios of the earlier version, including the end-to-end pipeline, were removed rather than repaired"),
+    ("LNDb entered the earlier version",                           "Scope: why LNDb is no longer used - it carried a second task, which is the confound Reviewer 3 identified"),
+    ("The title has been changed",                                 "Scope: why the title changed - the earlier one named both cohorts and a two-way contrast the three-arm design supersedes"),
+    ("the conclusion of this work is not the conclusion",          "Scope: the conclusion of this version is not the conclusion of the earlier one, and we say so rather than let it be noticed"),
+    ("2D backbones on volumetric CT",                              "Reviewer 4 Concern 3 - the 2D-for-3D limitation"),
+    ("high-agreement subcohort",                                   "Reviewer 4 Concern 4 - label-noise sensitivity analysis"),
+    ("Learning dynamics",                                          "Reviewer 4 Concern 5 - training and validation curves"),
+    ("nodule-level confusion matrices",                            "Reviewer 4 Concern 6 - confusion matrices provided"),
 ]
 
 doc = fitz.open(SRC)
@@ -130,13 +140,15 @@ body = (
 "To quantify that rather than assert it, we compared the two compiled manuscripts sentence by "
 "sentence, excluding the reference list, counting a sentence as unchanged only when it matches the "
 f"original exactly after normalising case and punctuation. On that measure {n_changed} of the "
-f"{n_total} sentences in this manuscript ({pct}%) do not appear in the submitted version in any "
-f"form, and {n_same} are unchanged. "
-"Highlighting every changed sentence would therefore highlight almost the entire document and would "
-"tell the reviewer nothing.\n\n"
-"We have instead highlighted the passages that answer specific concerns, each annotated with the "
-"concern it addresses. Hovering or clicking a highlight shows the note. Everything not highlighted "
-"should also be read as new.\n\n"
+f"{n_total} sentences in this manuscript ({pct}%) are not present in the submitted version, and "
+f"{n_same} are unchanged.\n\n"
+"Marking every individual change would therefore mean marking almost every line of the article. "
+"The result would be extremely cluttered and difficult to follow, which would defeat the purpose "
+"of the file. We have instead highlighted the topics where the changes are, so that the reading is "
+"easier: each highlight sits at the passage that answers a particular concern and is annotated "
+"with the reviewer and concern number it addresses, so a reviewer can go straight to their own "
+"comment. Hovering or clicking a highlight shows the note. Everything not highlighted should also "
+"be read as new.\n\n"
 "The point-by-point response is in the accompanying Response to Reviewers document."
 )
 cover.insert_textbox(fitz.Rect(60, y, cover.rect.width - 60, cover.rect.height - 70),
@@ -184,6 +196,14 @@ for anchor, note in ANCHORS:
     hits += 1
     if phrase != anchor:
         shortened.append((anchor, phrase))
+
+if misses:
+    # Check BEFORE writing. The abort used to run after doc.save, which left an incomplete file on
+    # disk for someone to pick up -- the failure mode the abort exists to prevent, one step later.
+    print("NOT FOUND (fix the anchor or the text moved):")
+    for m in misses:
+        print("   -", m)
+    raise SystemExit(f"ABORT: {len(misses)} anchor(s) unmatched; nothing was written.")
 
 doc.save(OUT, garbage=3, deflate=True)
 print(f"wrote {OUT}")
