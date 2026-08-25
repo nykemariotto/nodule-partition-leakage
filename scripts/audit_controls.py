@@ -22,6 +22,9 @@ fp16 — if the two disagree, that is the code!=numbers failure class that sank 
     python scripts/audit_controls.py
     python scripts/audit_controls.py --json outputs/metrics/audit_controls.json
 
+Defaults to the full reported grid (3 repeats x 5 folds, n=15). `--reps` narrows it, which
+changes the quantity being estimated, so the header prints the n every run.
+
 Prints a table per architecture and writes machine-readable JSON. Nothing is fabricated: every
 number traces to a file in outputs/.
 """
@@ -192,7 +195,8 @@ def main():
     ap.add_argument("--config", default="config.yaml")
     ap.add_argument("--archs", default=None,
                     help="comma-separated. DEFAULT: every architecture with runs on disk.")
-    ap.add_argument("--reps", default="0", help="comma-separated rep indices; grid S2 = 0,1,2 (n=15)")
+    ap.add_argument("--reps", default="0,1,2",
+                    help="comma-separated rep indices; the reported grid is 0,1,2 (n=15)")
     ap.add_argument("--folds", default="0,1,2,3,4")
     ap.add_argument("--probe", action="store_true", help="also run on the _final PROBE checkpoint")
     # None -> derived from --dataset below, so forgetting the flag cannot make the sensitivity
@@ -222,9 +226,12 @@ def main():
     everything = {}
     for arch in _ARCHS:
         for suffix, kind in ([("", "CANONICAL")] + ([("_final", "PROBE")] if args.probe else [])):
-            print(f"\n=== {arch} | {kind} | from ARCHIVED probs (outputs/probs/*.npz) ===")
             r = analyze_arch(cfg, arch, folds, suffix, reps)
             d = pd.DataFrame(r["_folds"])
+            # n after the run, not before: it is what was actually found on disk, which is
+            # the number the intervals below are built from.
+            print(f"\n=== {arch} | {kind} | from ARCHIVED probs (outputs/probs/*.npz)"
+                  f" | n={len(d)} (rep x fold) ===")
             if not d.empty:
                 print(d.to_string(index=False))
             print("  gap = random - patient (AUC) / patient - random (log-loss, Brier)")

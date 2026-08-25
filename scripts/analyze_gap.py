@@ -25,6 +25,12 @@ folds-positive, and Wilcoxon signed-rank with its attainable floor (n=15 -> min 
     python scripts/analyze_gap.py --arch densenet121          # canonical only
     python scripts/analyze_gap.py --arch densenet121 --probe  # also print the _final probe
 
+Defaults to the full reported grid (3 repeats x 5 folds, n=15); the header states the n.
+This script needs the trained .pt weights, which are NOT part of the released repository:
+it re-runs inference to cross-check the archived probabilities, which is a developer check,
+not part of the no-GPU path a reader follows. Three repeats take about three times as long
+as one, which is the cost of comparing like with like against audit_controls.py.
+
 Reads only saved artifacts + splits. Skips folds whose model is missing (so it can be run
 while the grid is still training). Nothing is fabricated.
 """
@@ -137,7 +143,8 @@ def main():
     ap.add_argument("--config", default="config.yaml")
     ap.add_argument("--arch", default="densenet121")
     ap.add_argument("--sample-unit", default="slice", choices=["slice", "nodule"])
-    ap.add_argument("--reps", default="0", help="comma-separated rep indices; grid S2 = 0,1,2 (n=15)")
+    ap.add_argument("--reps", default="0,1,2",
+                    help="comma-separated rep indices; the reported grid is 0,1,2 (n=15)")
     ap.add_argument("--folds", default="0,1,2,3,4")
     ap.add_argument("--probe", action="store_true", help="also print the _final (memorization) probe")
     ap.add_argument("--dataset", default="lidc_binary",
