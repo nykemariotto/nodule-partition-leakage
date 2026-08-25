@@ -190,6 +190,9 @@ def analyze_arch(cfg, arch, folds, suffix="", reps=(0,)):
     return out
 
 
+FULL_REPS, FULL_FOLDS = [0, 1, 2], [0, 1, 2, 3, 4]      # the grid the manuscript reports, n=15
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--config", default="config.yaml")
@@ -208,6 +211,8 @@ def main():
     args = ap.parse_args()
     global DATASET
     DATASET = args.dataset
+    reps = [int(x) for x in args.reps.split(",")]
+    folds = [int(x) for x in args.folds.split(",")]
     from src.artifacts import resolve_archs, name_for as _NAME_FOR
     _repo = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     _probs = os.path.join(_repo, "outputs", "probs")
@@ -216,12 +221,18 @@ def main():
                                             [int(x) for x in args.reps.split(",")],
                                             [int(x) for x in args.folds.split(",")]))
     if args.json is None:
-        suffix = "" if DATASET == "lidc_binary" else f"_{DATASET}"
-        args.json = "outputs/metrics/" + _NAME_FOR("audit_controls", DATASET,
-                                                  _ARCHS, _PRESENT) + ".json"
+        # The canonical artifact is the one the manuscript's table traces to. A narrower grid
+        # estimates a different quantity, and the filename does not encode the repeats, so writing
+        # it here would replace the published result with a partial one -- and leave it NEWER than
+        # its inputs, which is precisely what the freshness gate cannot see.
+        if reps != FULL_REPS or folds != FULL_FOLDS:
+            print(f"  note   this run is narrower than the reported grid "
+                  f"(reps {reps} x folds {folds}, against {FULL_REPS} x {FULL_FOLDS}): the "
+                  f"canonical\n         JSON is left untouched. Pass --json PATH to save it.")
+        else:
+            args.json = "outputs/metrics/" + _NAME_FOR("audit_controls", DATASET,
+                                                      _ARCHS, _PRESENT) + ".json"
     cfg = load_config(args.config)
-    reps = [int(x) for x in args.reps.split(",")]
-    folds = [int(x) for x in args.folds.split(",")]
 
     everything = {}
     for arch in _ARCHS:
