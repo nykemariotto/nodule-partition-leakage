@@ -1,0 +1,7 @@
+densenet121      patient  n=15  auc 0.9148  f1 0.7847  accuracy 0.8626
+densenet121      random   n=15  auc 0.9673  f1 0.8906  accuracy 0.9142
+efficientnet_b0  patient  n=15  auc 0.9086  f1 0.7620  accuracy 0.8449
+efficientnet_b0  random   n=15  auc 0.9684  f1 0.8895  accuracy 0.9129
+McNemar densenet121 vs efficientnet_b0 in patient: b=319 c=231 p=0.0002 (chi-square (continuity-corrected))
+McNemar densenet121 vs efficientnet_b0 in random: b=757 c=735 p=0.5867 (chi-square (continuity-corrected))
+wrote E:/NODULES\outputs\results\per_model_metrics.json

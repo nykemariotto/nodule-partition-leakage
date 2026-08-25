@@ -1,0 +1,24 @@
+protocol: max_epochs 30 · early_stopping_patience 10 · checkpoint best_loss
+arch             arm      fold  ES_pick  stop@  saved    verdict
+densenet121      patient  0     4        14     4        match
+densenet121      patient  1     4        14     4        match
+densenet121      patient  2     4        14     4        match
+densenet121      patient  3     2        12     2        match
+densenet121      patient  4     3        13     3        match
+densenet121      random   0     16       26     16       match
+densenet121      random   1     22       None   22       match
+densenet121      random   2     22       None   22       match
+densenet121      random   3     28       None   28       match
+densenet121      random   4     23       None   23       match
+efficientnet_b0  patient  0     9        19     9        match
+efficientnet_b0  patient  1     17       27     17       match
+efficientnet_b0  patient  2     10       20     10       match
+efficientnet_b0  patient  3     7        17     7        match
+efficientnet_b0  patient  4     2        12     2        match
+efficientnet_b0  random   0     23       None   23       match
+efficientnet_b0  random   1     30       None   30       match
+efficientnet_b0  random   2     28       None   28       match
+efficientnet_b0  random   3     28       None   28       match
+efficientnet_b0  random   4     16       26     16       match
+
+OK — every canonical checkpoint equals the early-stopped selection.

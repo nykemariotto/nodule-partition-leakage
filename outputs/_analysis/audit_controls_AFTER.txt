@@ -1,0 +1,66 @@
+
+=== densenet121 | CANONICAL | from ARCHIVED probs (outputs/probs/*.npz) ===
+ rep  fold  n_patient  n_random  n_matched  matched_nodules  matched_pos_rate
+   0     0       2290      2206        460              221          0.543478
+   0     1       2667      2205        537              234          0.592179
+   0     2       2021      2205        406              210          0.433498
+   0     3       2071      2205        425              215          0.451765
+   0     4       1977      2205        387              206          0.462532
+   1     0       2089      2206        412              212          0.500000
+   1     1       2141      2205        459              215          0.466231
+   1     2       2188      2205        441              218          0.503401
+   1     3       2448      2205        463              228          0.548596
+   1     4       2160      2205        437              215          0.549199
+   2     0       2005      2206        363              202          0.457300
+   2     1       2260      2205        449              235          0.527840
+   2     2       2351      2205        484              234          0.578512
+   2     3       2084      2205        401              204          0.468828
+   2     4       2326      2205        446              227          0.475336
+  gap = random - patient (AUC) / patient - random (log-loss, Brier)
+  SLICE (pre-reg primary) AUC        +0.0642  naive95 [+0.0499,+0.0786]  NB95 [+0.0313,+0.0972]  +15/15
+  SLICE log-loss                     +0.1764  naive95 [+0.1395,+0.2132]  NB95 [+0.0916,+0.2611]  +15/15
+  SLICE Brier                        +0.0560  naive95 [+0.0447,+0.0672]  NB95 [+0.0300,+0.0819]  +15/15
+  NODULE AUC                         +0.0524  naive95 [+0.0418,+0.0630]  NB95 [+0.0279,+0.0769]  +15/15
+  NODULE log-loss                    +0.1241  naive95 [+0.1032,+0.1451]  NB95 [+0.0760,+0.1723]  +15/15
+  NODULE Brier                       +0.0395  naive95 [+0.0327,+0.0463]  NB95 [+0.0238,+0.0552]  +15/15
+  MATCHED-rows SLICE AUC             +0.0637  naive95 [+0.0476,+0.0799]  NB95 [+0.0265,+0.1009]  +15/15
+  MATCHED-rows SLICE log-loss        +0.1813  naive95 [+0.1389,+0.2236]  NB95 [+0.0839,+0.2786]  +15/15
+  MATCHED-rows SLICE Brier           +0.0576  naive95 [+0.0458,+0.0695]  NB95 [+0.0304,+0.0848]  +15/15
+  MATCHED-rows NODULE AUC            +0.0583  naive95 [+0.0436,+0.0729]  NB95 [+0.0246,+0.0920]  +15/15
+  MATCHED-rows NODULE log-loss       +0.1597  naive95 [+0.1254,+0.1939]  NB95 [+0.0809,+0.2384]  +15/15
+  MATCHED-rows NODULE Brier          +0.0508  naive95 [+0.0411,+0.0606]  NB95 [+0.0285,+0.0732]  +15/15
+  [D6] Nadeau-Bengio rho = n_test/n_train = 0.2863 -> CIs widen x2.301 vs naive
+
+=== efficientnet_b0 | CANONICAL | from ARCHIVED probs (outputs/probs/*.npz) ===
+ rep  fold  n_patient  n_random  n_matched  matched_nodules  matched_pos_rate
+   0     0       2290      2206        460              221          0.543478
+   0     1       2667      2205        537              234          0.592179
+   0     2       2021      2205        406              210          0.433498
+   0     3       2071      2205        425              215          0.451765
+   0     4       1977      2205        387              206          0.462532
+   1     0       2089      2206        412              212          0.500000
+   1     1       2141      2205        459              215          0.466231
+   1     2       2188      2205        441              218          0.503401
+   1     3       2448      2205        463              228          0.548596
+   1     4       2160      2205        437              215          0.549199
+   2     0       2005      2206        363              202          0.457300
+   2     1       2260      2205        449              235          0.527840
+   2     2       2351      2205        484              234          0.578512
+   2     3       2084      2205        401              204          0.468828
+   2     4       2326      2205        446              227          0.475336
+  gap = random - patient (AUC) / patient - random (log-loss, Brier)
+  SLICE (pre-reg primary) AUC        +0.0816  naive95 [+0.0703,+0.0929]  NB95 [+0.0556,+0.1077]  +15/15
+  SLICE log-loss                     +0.3145  naive95 [+0.2577,+0.3714]  NB95 [+0.1837,+0.4453]  +15/15
+  SLICE Brier                        +0.0796  naive95 [+0.0690,+0.0902]  NB95 [+0.0552,+0.1039]  +15/15
+  NODULE AUC                         +0.0603  naive95 [+0.0502,+0.0704]  NB95 [+0.0370,+0.0836]  +15/15
+  NODULE log-loss                    +0.1588  naive95 [+0.1306,+0.1870]  NB95 [+0.0940,+0.2236]  +15/15
+  NODULE Brier                       +0.0505  naive95 [+0.0420,+0.0589]  NB95 [+0.0311,+0.0699]  +15/15
+  MATCHED-rows SLICE AUC             +0.0802  naive95 [+0.0659,+0.0944]  NB95 [+0.0474,+0.1129]  +15/15
+  MATCHED-rows SLICE log-loss        +0.3128  naive95 [+0.2486,+0.3769]  NB95 [+0.1652,+0.4603]  +15/15
+  MATCHED-rows SLICE Brier           +0.0794  naive95 [+0.0671,+0.0918]  NB95 [+0.0510,+0.1079]  +15/15
+  MATCHED-rows NODULE AUC            +0.0720  naive95 [+0.0588,+0.0853]  NB95 [+0.0416,+0.1025]  +15/15
+  MATCHED-rows NODULE log-loss       +0.2295  naive95 [+0.1934,+0.2657]  NB95 [+0.1463,+0.3128]  +15/15
+  MATCHED-rows NODULE Brier          +0.0661  naive95 [+0.0563,+0.0760]  NB95 [+0.0435,+0.0888]  +15/15
+  [D6] Nadeau-Bengio rho = n_test/n_train = 0.2863 -> CIs widen x2.301 vs naive
+
+wrote E:/NODULES\outputs/_analysis/audit_controls_AFTER.json

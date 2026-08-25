@@ -1,0 +1,95 @@
+{
+  "bad_checkpoint": [
+    {
+      "run": "lidc_binary_nodule_patient_rep2_fold3_efficientnet_b0_none_seed42",
+      "selected_epoch": 30,
+      "protocol_epoch": 16,
+      "window_closes": 26,
+      "su": "nodule",
+      "arm": "patient",
+      "rep": 2,
+      "fold": 3,
+      "arch": "efficientnet_b0",
+      "seed": 42
+    },
+    {
+      "run": "lidc_binary_nodule_random_rep2_fold2_densenet121_none_seed42",
+      "selected_epoch": 29,
+      "protocol_epoch": 11,
+      "window_closes": 21,
+      "su": "nodule",
+      "arm": "random",
+      "rep": 2,
+      "fold": 2,
+      "arch": "densenet121",
+      "seed": 42
+    },
+    {
+      "run": "lidc_binary_slice_random_rep0_fold4_efficientnet_b0_none_seed42",
+      "selected_epoch": 30,
+      "protocol_epoch": 15,
+      "window_closes": 25,
+      "su": "slice",
+      "arm": "random",
+      "rep": 0,
+      "fold": 4,
+      "arch": "efficientnet_b0",
+      "seed": 42
+    },
+    {
+      "run": "lidc_binary_slice_random_rep1_fold2_densenet121_none_seed42",
+      "selected_epoch": 26,
+      "protocol_epoch": 12,
+      "window_closes": 22,
+      "su": "slice",
+      "arm": "random",
+      "rep": 1,
+      "fold": 2,
+      "arch": "densenet121",
+      "seed": 42
+    },
+    {
+      "run": "lidc_binary_slice_random_rep1_fold2_efficientnet_b0_none_seed42",
+      "selected_epoch": 25,
+      "protocol_epoch": 11,
+      "window_closes": 21,
+      "su": "slice",
+      "arm": "random",
+      "rep": 1,
+      "fold": 2,
+      "arch": "efficientnet_b0",
+      "seed": 42
+    },
+    {
+      "run": "lidc_binary_slice_random_rep1_fold3_densenet121_none_seed42",
+      "selected_epoch": 27,
+      "protocol_epoch": 15,
+      "window_closes": 25,
+      "su": "slice",
+      "arm": "random",
+      "rep": 1,
+      "fold": 3,
+      "arch": "densenet121",
+      "seed": 42
+    },
+    {
+      "run": "lidc_binary_slice_random_rep2_fold3_densenet121_none_seed42",
+      "selected_epoch": 29,
+      "protocol_epoch": 18,
+      "window_closes": 28,
+      "su": "slice",
+      "arm": "random",
+      "rep": 2,
+      "fold": 3,
+      "arch": "densenet121",
+      "seed": 42
+    }
+  ],
+  "bad_max_epochs": [],
+  "unstamped": [],
+  "inspected": 120,
+  "config": {
+    "max_epochs": 30,
+    "early_stopping_patience": 10
+  }
+}

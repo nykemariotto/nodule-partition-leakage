@@ -1,0 +1,10 @@
+quantity,arm,value,n_folds,source
+patients,all,740,,outputs/metadata/dataset_accounting.json
+nodules,all,1695,,outputs/metadata/dataset_accounting.json
+slices,all,11026,,outputs/metadata/dataset_accounting.json
+L_pat (patient split),A,0.0000,15,outputs/splits/*.csv
+L_nod (nodule split),A,0.0000,15,outputs/splits/*.csv
+L_pat (patient split),C,0.6896,15,outputs/splits/*.csv
+L_nod (nodule split),C,0.0000,15,outputs/splits/*.csv
+L_pat (patient split),B,0.9948,15,outputs/splits/*.csv
+L_nod (nodule split),B,0.9731,15,outputs/splits/*.csv

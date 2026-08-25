@@ -1,0 +1,11 @@
+arm      fold  pat tr/te  pat tr/val  nod tr/te  row tr/te    interpretation
+patient  0     0          0           0          0            0.0% of test rows belong to a TRAIN patient
+patient  1     0          0           0          0            0.0% of test rows belong to a TRAIN patient
+patient  2     0          0           0          0            0.0% of test rows belong to a TRAIN patient
+patient  3     0          0           0          0            0.0% of test rows belong to a TRAIN patient
+patient  4     0          0           0          0            0.0% of test rows belong to a TRAIN patient
+random   0     199        153         348        0            98.9% of test rows belong to a TRAIN patient
+random   1     194        157         335        0            99.7% of test rows belong to a TRAIN patient
+random   2     204        152         339        0            99.5% of test rows belong to a TRAIN patient
+random   3     201        147         334        0            99.8% of test rows belong to a TRAIN patient
+random   4     200        152         328        0            99.4% of test rows belong to a TRAIN patient
