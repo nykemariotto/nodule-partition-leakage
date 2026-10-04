@@ -32,7 +32,7 @@ _CFG = r"E:\NODULES\config.yaml"
 
 
 def _current_config_hash():
-    """Hash of the config in effect NOW (D25). None if unavailable (never blocks on that)."""
+    """Hash of the config in effect NOW. None if unavailable (never blocks on that)."""
     try:
         from src.metadata import load_config
         from src.config_contract import config_hash
@@ -85,7 +85,7 @@ def is_valid(run: str, verbose: bool = False) -> bool:
         h = json.load(open(hp))
         if not h.get("history") or "auc" not in h.get("test", {}):
             why.append("history incomplete")
-        # D25 CONFIG-STALENESS: a run trained under a different config must not be folded into
+        # CONFIG STALENESS: a run trained under a different config must not be folded into
         # the grid average. If the run carries a stamp and it differs from the config in effect
         # now, it is stale. Runs with no stamp (pre-2026-07-20) skip this check (backward compat).
         stamp = h.get("config_sha256")

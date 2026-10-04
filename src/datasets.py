@@ -1,5 +1,5 @@
 """
-STAGE 4 — torch Dataset reading from split CSVs (SPEC §3). NEVER flow_from_directory.
+torch Dataset reading from the split CSVs. NEVER flow_from_directory.
 
 Reads a split CSV (sample rows: patient_id, nodule_id, z_position, label) and joins it to the
 processed index to locate each 256x256x3 .npy. TRAIN-only augmentation (config.augment);

@@ -1,5 +1,5 @@
 <#
-  run_grid.ps1 - hardened, resumable training driver (DECISIONS D23).
+  run_grid.ps1 - hardened, resumable training driver.
 
   Runs OUTSIDE any editor or assistant session so it survives a client crash. Launch from
   YOUR OWN terminal:
@@ -11,7 +11,7 @@
     1. CONFIG CONTRACT - scripts/verify_config_contract.py. Every config.yaml key must have a
                         declared, true relationship to the code (consumed / hardcoded /
                         documentation / deferred). A key no code reads is a false claim, and at
-                        grid scale it would be inherited silently by hundreds of runs (D27).
+                        grid scale it would be inherited silently by hundreds of runs.
     2. COVERAGE       - scripts/verify_coverage.py --phase <subset|grid>, before any training.
     3. ATOMIC WRITES  - enforced inside src/train.py (.tmp + os.replace for .npz/.json/.pt).
     4. VALIDATED SKIP - scripts/run_is_valid.py decides "already done" by CONTENT
@@ -22,7 +22,7 @@
   watching the terminal. Re-running resumes cleanly: valid runs are skipped, missing or
   invalid ones are retrained.
 
-  -Phase subset : the 250-patient pre-registered experiment.
+  -Phase subset : the 250-patient pilot.
   -Phase grid   : REQUIRES 100% coverage of the full 740-patient cohort.
 #>
 param(
@@ -35,21 +35,21 @@ param(
   [string]   $Archs        = "densenet121,efficientnet_b0",
   [string]   $Arms         = "patient,random",
   [string]   $Folds        = "0,1,2,3,4",
-  # Grid axes (D34: S2 is THE experiment). Reps parameterize the repeats (D5): S2 = 3 reps x 5
+  # Grid axes (S2 is THE experiment). Reps parameterize the repeats: S2 = 3 reps x 5
   # folds = n>=10 for the paired test. SampleUnits = the 2x2 granularity axis (slice + nodule).
   # Seeds per rep come from config.repetition.seed_list; --rep selects which seed src/splits used.
   [string]   $Reps         = "0",
   [string]   $SampleUnits  = "slice",
-  # 0 = INHERIT from config.train.* (D48). Pass a value only to deliberately override, and expect
+  # 0 = INHERIT from config.train.*. Pass a value only to deliberately override, and expect
   # verify_grid_consistency to reject the grid if that override contradicts the config.
   [int]      $MaxEpochs = 0,
   [int]      $Patience  = 0,
   [int]      $Seed      = 42,
   # Dataset tag = the split-file prefix. "lidc_binary" is the principal cohort; "lidc_binary_ge3"
-  # is the >=3-annotator sensitivity cohort (D37), whose splits src/splits.py writes under that
+  # is the >=3-annotator sensitivity cohort, whose splits src/splits.py writes under that
   # distinct prefix precisely so its runs can NEVER be averaged in with the principal ones.
-  # Was hardcoded in three places until 2026-07-26 - the same defect class as the patience hardcode
-  # (D48): a value the script asserts rather than receives.
+  # It was once hardcoded in three places - the same defect class as the patience hardcode: a
+  # value the script asserts rather than receives.
   [string]   $Dataset   = "lidc_binary",
   [string]   $Python    = "C:\ProgramData\miniconda3\envs\nodules\python.exe",
   [string]   $Root      = "E:\NODULES"
@@ -145,7 +145,7 @@ foreach ($su in $SampleList) {
       Write-Log "START $run"
       $t0 = Get-Date
 
-      # D48: DO NOT hardcode epoch budget / patience here. 0 = inherit config.train.* (src/train.py
+      # DO NOT hardcode epoch budget / patience here. 0 = inherit config.train.* (src/train.py
       # falls back to the config when the flag is absent). Hardcoding them is how --max-epochs 8,
       # channels_last and --patience 30 each silently overrode the DECLARED protocol while every
       # run still agreed with every other run and the old gate passed.
@@ -181,7 +181,7 @@ foreach ($su in $SampleList) {
  }
 }
 
-# ---------------- FINAL GATE: the grid must be ONE experiment (D34 internal consistency) ----------------
+# ---------------- FINAL GATE: the grid must be ONE experiment (internal consistency) ----------------
 Write-Log "[FINAL] grid internal-consistency (single config/max_epochs/patience across all runs) ..."
 $gcOut = Join-Path $logDir "grid_consistency_$stamp.log"
 $gc = Start-Process -FilePath $Python -ArgumentList @("scripts\verify_grid_consistency.py", "--config", $Config, "--require-stamp") `

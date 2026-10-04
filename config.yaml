@@ -1,10 +1,17 @@
 # =====================================================================
-# config.yaml — single declarative source of hyperparameters (SPEC §4)
+# config.yaml — single declarative source of the experiment's settings.
 # Every number the pipeline uses lives here. No magic numbers in code.
 # Windows host: paths use forward slashes; pathlib normalizes them.
 #
-# 2026-07-17 premise update: deadline is no longer a constraint. Prioritize
-# maximum robustness and auditability over speed.
+# READING THIS FILE AGAINST THE PAPER. The reported experiment is setting S2 only.
+# Some keys below describe parts of a broader plan that were not run (settings S1
+# and S3, ensembling, the mechanism stage, patient-level aggregation, the CLAHE
+# variant) or are not read as switches (split ratios, architecture lists, stats).
+# Their values are left exactly as they were because the SHA-256 of the parsed
+# values is stamped into every run, so editing them would break the check that ties
+# the 316 archived runs to this file; comments do not enter the hash. The status of
+# every key is declared in src/config_contract.py, and the comments marked
+# "NOT USED" below say the same.
 # =====================================================================
 
 project:
@@ -16,20 +23,20 @@ paths:
   # This MUST match the [dicom] path in pylidc.conf (pylidc's source of truth).
   lidc_dicom_root: "E:/NODULES/LIDC-IDRI/manifest-1600709154662/LIDC-IDRI"
   lidc_metadata_csv: "E:/NODULES/LIDC-IDRI/manifest-1600709154662/metadata.csv"
-  lndb_root: "E:/NODULES/LNDb"          # populated after the Zenodo v4 download
+  lndb_root: "E:/NODULES/LNDb"          # NOT USED: the study is confined to LIDC-IDRI
   outputs: "outputs"
 
 # ---------------------------------------------------------------------
-# Metadata / sample construction (STAGE 1 — src/metadata.py)
+# Metadata / sample construction (src/metadata.py)
 # The master table is a SUPERSET (all labelled nodules, min_annotators>=1);
 # downstream stages filter to the principal cohort via `cohort_main`.
 # ---------------------------------------------------------------------
 metadata:
   engine: pylidc                        # annotation->nodule clustering + labels
   emit_superset: true                   # master = every labelled nodule; do not drop rows at build time
-  min_annotators_principal: 1           # PRINCIPAL cohort (D16, 2026-07-17 reversal): literature-comparable + statistically viable
-  min_annotators_sensitivity: [1, 3]    # >=3 = high-agreement label-noise robustness check
-  over_merge_flag_threshold: 4          # FLAG (never split) nodules with >4 annotators (Decision 3)
+  min_annotators_principal: 1           # PRINCIPAL cohort: every nodule marked by at least one radiologist
+  min_annotators_sensitivity: [1, 3]    # >=3 = high-agreement label-noise sensitivity cohort
+  over_merge_flag_threshold: 4          # FLAG (never split) nodules with >4 annotations
   clustering:
     # pylidc Scan.cluster_annotations() defaults (documented for reproducibility):
     metric: min
@@ -45,71 +52,71 @@ label:
   malignant: [4, 5]
   benign: [1, 2]
   exclude_ambiguous: [3]
-  consensus: median                     # MEDIAN of radiologist scores (NOT mean) — D1; verified refs in DECISIONS.md
+  consensus: median                     # MEDIAN of radiologist scores (NOT mean)
                                         # median in {4,5} -> malignant; {1,2} -> benign; == 3 -> excluded
   encoding: {malignant: 1, benign: 0}
 
 # ---------------------------------------------------------------------
-# Experiment matrix (SPEC §2.1-2.3) — the FULL 2x2 runs on EVERY setting
+# Experiment matrix
 # ---------------------------------------------------------------------
 experiment:
-  # sample_units are PER-SETTING: full 2x2 only on the flagship S2; S1/S3 use the
-  # principal axis (slice) — S2 carries the "not a slice-level artifact" argument;
-  # S1/S3 carry dataset-generalization / end-to-end (SPEC §2.3, DECISIONS.md).
+  # NOT USED: only S2 was run and reported; S1 and S3 were planned and not run.
+  # S2 is the LIDC-IDRI binary task with both sample units (slice and nodule).
   settings:
     S1: {dataset: lndb_multiclass, task: multiclass, sample_units: [slice]}          # GGO/part-solid/solid
-    S2: {dataset: lidc_binary,     task: binary,     sample_units: [slice, nodule]}  # flagship — full 2x2
+    S2: {dataset: lidc_binary,     task: binary,     sample_units: [slice, nodule]}  # the reported setting
     S3: {dataset: lidc_end2end,    task: binary,     sample_units: [slice]}          # seg->ROI->classify; independent test
   split_units:  [patient, random]       # patient = GroupKFold(patient_id) [Arm A]; random = KFold ignoring patient [Arm B]
-  # Gap(setting, arch, sample_unit) = mean_over_folds[ metric(random) - metric(patient) ]
-  # S2 Arm B TWO leakage levels reported SEPARATELY (never collapsed) -> mechanism (B10):
-  #   (sample=slice,  random) = slice-redundancy leakage
-  #   (sample=nodule, random) = patient-context-via-nodule leakage
+                                        # the third arm (nodule-grouped, Arm C) is an argument of src/splits.py
+  # Gap(arch, sample_unit) = mean_over_folds[ metric(random) - metric(patient) ]
+  # The two sample units are reported separately, never collapsed:
+  #   (sample=slice,  random) = slices of one nodule on both sides of the split
+  #   (sample=nodule, random) = nodules of one patient on both sides of the split
   report_leakage_levels_separately: true
 
 # ---------------------------------------------------------------------
-# Preprocessing (STAGE 2 — src/preprocess.py) — deterministic
+# Preprocessing (src/preprocess.py) — deterministic
 # ---------------------------------------------------------------------
 preprocess:
   input_size: [256, 256, 3]             # H, W, C (prep guide PubMed 37484314)
   hu_clip: [-1000, 400]                 # clip HU to [-1000,400] (air<->bone), then rescale [0,1]
-                                        # majority DL-nodule practice: ProCAN (arXiv 2010.15417), Al-Shabi (D18)
+                                        # common DL-nodule practice, e.g. ProCAN (arXiv 2010.15417)
   rescale: [0.0, 1.0]
   consensus_rule: 0.5                   # pylidc consensus clevel: >=2 of 4 annotators -> consensus ROI mask
   roi_pad_mm: 8                         # padding around the consensus bbox before the square crop
   channels: replicate                   # single HU-windowed channel replicated to 3 (ImageNet-compatible)
-  enhancement: [none, clahe]            # ABLATION FACTOR (SPEC §2.6b): controlled with/without image enhancement
-  enhancement_principal: none           # the enhancement used in the main grid; 'clahe' is the ablation arm
+  enhancement: [none, clahe]            # NOT USED as a switch: the CLAHE variant was not run
+  enhancement_principal: none           # every reported run uses no enhancement
 
 # ---------------------------------------------------------------------
-# Splitting (STAGE 3 — src/splits.py)
+# Splitting (src/splits.py)
 # ---------------------------------------------------------------------
 split:
+  # NOT USED: no code reads these ratios. The split is 5-fold cross-validation, so each test
+  # fold holds 20% of the units, and validation is 12.5% of the remaining units, carved with
+  # the same grouping unit as the test split (val_frac in src/splits.py).
   ratios: {train: 0.8, val: 0.1, test: 0.1}
   group_key: patient_id                 # patient-level grouping key (Arm A)
-  # stratify_key REMOVED 2026-07-20 (DECISIONS D28). It declared label stratification that
-  # src/splits.py never performed. Measured before removing: sklearn StratifiedGroupKFold makes
-  # fold prevalence WORSE here (SD 0.0609 -> 0.0634; 73% of patients are label-pure, ICC 0.357),
-  # and even a near-perfect balancer (prevalence SD 0.0038, 15x better) moves the fold-to-fold
-  # metric SD by only 1-7%. Folds are grouped-only, by evidence, not by omission.
+  # Folds are grouped, not stratified by label. On the 740-patient pool a stratified grouped
+  # split does not reduce fold-prevalence spread (scripts/project_stratification.py), and a
+  # near-perfect balancer barely moves the fold-to-fold metric SD (scripts/project_balancer.py).
 
-# Repetition = Repeated Grouped-vs-Random K-Fold. Seeds parameterize the repeats, so
-# "seeds AND GroupKFold" is unified (no redundant seed x fold cross-product). SPEC §2.2.
-# n = repeats x folds paired points for the A-vs-B Wilcoxon. n>=10 is MANDATORY: at n=5
-# the Wilcoxon signed-rank cannot reach p<0.05 (min two-sided p = 2/2^5 = 0.0625).
+# Repetition = repeated grouped-vs-random K-fold. Seeds parameterize the repeats, so there is
+# no separate seed x fold cross-product: repeat r draws its folds with seed_list[r].
+# n = repeats x folds paired points; the paired test is the Nadeau-Bengio corrected t-test.
 repetition:
   scheme: repeated_group_kfold
-  variance_correction: nadeau_bengio    # corrects for correlated folds within a repeat (cite in paper)
+  variance_correction: nadeau_bengio    # corrects for correlated folds within a repeat
   per_setting:                          # repeats x folds  ->  n paired points
-    S2: {repeats: 3, folds: 5}          # n = 15  (flagship, max rigor)
-    S1: {repeats: 2, folds: 5}          # n = 10
-    S3: {repeats: 2, folds: 5}          # n = 10
-  seed_list: [42, 123, 2024, 7, 99]     # repeat r uses seed_list[r] for both arms
+    S2: {repeats: 3, folds: 5}          # n = 15 (the reported setting)
+    S1: {repeats: 2, folds: 5}          # NOT USED (S1 not run)
+    S3: {repeats: 2, folds: 5}          # NOT USED (S3 not run)
+  seed_list: [42, 123, 2024, 7, 99]     # repeat r uses seed_list[r] for every arm; S2 uses the first three
   group_key: patient_id
 seed_list: [42, 123, 2024, 7, 99]       # kept for backward-compat references
 
 # ---------------------------------------------------------------------
-# Training (STAGE 4 — src/train.py)  — 8 GB survival kit
+# Training (src/train.py) — sized for an 8 GB GPU
 # ---------------------------------------------------------------------
 train:
   optimizer: adam
@@ -118,30 +125,28 @@ train:
   grad_accum_steps: 4
   max_epochs: 30
   early_stopping_patience: 10
-  # CANONICAL checkpoint = best val_loss (what early stopping selects) -> THE paper number (D22).
-  # 'final' (max memorization) is ALSO saved every run, but is a MECHANISTIC PROBE only, never the headline.
+  # The reported checkpoint is the one with the lowest validation loss within the early-stopping
+  # window. Training continues to max_epochs so that the final-epoch checkpoint is also kept;
+  # it is never used for a reported number.
   checkpoint_selection: best_loss
   # Early stopping selects on the VALIDATION set, whose leakage status MIRRORS the test set per arm
   # (measured): patient arm val 0.0% patient-overlap with train; random arm val ~99% overlap.
-  # Consequence: in the random arm the leaked val keeps improving -> stopping is delayed -> a more
-  # memorized checkpoint is chosen. This is faithful to the audited practice but INFLATES the gap
-  # via a second route (leaky val misleads early stopping) on top of the leaky test. Documented, not "fixed".
+  # In the random arm the leaky validation set can therefore delay stopping. That is part of the
+  # effect a study inherits when it partitions this way, so it is kept, not corrected.
   reduce_lr: {factor: 0.1, patience: 5, monitor: val_loss}
   amp: true
-  # PERFORMANCE-ONLY settings (D22 amendment 2026-07-19). Measured on this machine:
+  # PERFORMANCE-ONLY settings. Measured on this machine:
   #   channels_last=True  -> DenseNet121 138.1 ms/batch   (concat has no channels_last kernel,
   #   channels_last=False -> DenseNet121  65.6 ms/batch    so the layout is converted constantly)
   #   worker spawn        -> 16.8 s per iterator creation x2 loaders x30 epochs ~= 17 min/run
   # These change memory layout and worker persistence only: augmentation PARAMETERS, epochs,
   # early stopping, checkpoint rule, metrics, architecture and data are untouched. They do shift
-  # which sequence the augmentation RNG emits (stochastic realization, not methodology) -> fixed
-  # BEFORE any canonical measurement, and ALL runs use these settings.
+  # which sequence the augmentation RNG emits (stochastic realization, not methodology); they
+  # were fixed before any reported run, and ALL runs use them.
   channels_last: false
   num_workers: 6
   persistent_workers: true
-  # freeze_then_finetune REMOVED 2026-07-20 (DECISIONS D27). It declared a head-first/unfreeze
-  # schedule that no code implements: every run in outputs/ is a FULL fine-tune from the
-  # pretrained weights. The config now describes what actually happens.
+  # Every run is a full fine-tune from the pretrained weights (no frozen-backbone phase).
 
 augment:                                # TRAIN ONLY
   rotation_deg: 30
@@ -151,36 +156,44 @@ augment:                                # TRAIN ONLY
   hflip: true
 
 # ---------------------------------------------------------------------
-# Architectures (SPEC §2.4) — expanded set, all fit 4060 Ti 8 GB via AMP + accum
+# Architectures
 # ---------------------------------------------------------------------
+# NOT USED as a switch: the architecture is a command-line argument of
+# scripts/run_grid.ps1. The reported grid ran densenet121, efficientnet_b0 and
+# vit_small (timm ids and pretrained tags in src/models.py; the paper lists the full
+# training configuration in a table of its Methods).
 architectures:
   primary: [resnet50, densenet121, efficientnet_b0, convnext_tiny, inception_v3]
-  sota:    [swin_tiny, maxvit_tiny_tf_224]      # transformer / hybrid baselines
+  sota:    [swin_tiny, maxvit_tiny_tf_224]      # transformer / hybrid candidates
   # escalate efficientnet_b0 -> b3 only if VRAM allows; drop batch & raise accumulation on OOM
 
+# NOT USED: no ensemble was built.
 ensemble:
   members: [resnet50, densenet121, efficientnet_b0]
-  method: soft_voting                   # PRIMARY — leakage-proof by construction (no meta-learner); D20
-  threshold: 0.5                        # declared; if tuned on val, log it explicitly
-  sensitivity: [uniform, weighted_val_auc]   # robustness: weights from VAL AUC only (nested CV), never test
+  method: soft_voting
+  threshold: 0.5                        # read by src/train.py for the accuracy it prints after each run
+  sensitivity: [uniform, weighted_val_auc]
 
 # ---------------------------------------------------------------------
-# Evaluation (STAGE 6-7) — aggregate at slice, nodule AND patient level
-# to neutralize the slice-level artificial class balance (SPEC §2.6 / I6)
+# Evaluation
 # ---------------------------------------------------------------------
 evaluate:
-  aggregation: [slice, nodule, patient] # mean of slice probs -> one label per nodule / per patient
+  aggregation: [slice, nodule, patient] # slice and nodule are reported; the patient level was not computed
   bootstrap_n: 2000
   ci: 0.95
   primary_metric: auc
 
+# NOT USED as switches. The paired test reported is the Nadeau-Bengio corrected
+# t-test (src/stats.py, scripts/fold_tests.py); within-arm architecture comparisons
+# are in scripts/nodule_oof.py.
 stats:
-  paired_ab: wilcoxon                   # A(patient) vs B(random) across seeds; paired-t as sensitivity
-  within_arm: mcnemar                   # same test set only (architecture / ensemble comparisons)
+  paired_ab: wilcoxon
+  within_arm: mcnemar
 
 # ---------------------------------------------------------------------
-# Mechanism analysis (STAGE 8 — SPEC §2.6a) — the "why", not only the "how much"
+# Attribution analysis
 # ---------------------------------------------------------------------
+# NOT USED: this stage was not run.
 mechanism:
-  attribution: [gradcam, shap]          # show random-split model attends peri-nodular patient context
-  quantify_leakage: true                # count patients whose slices/nodules bleed train<->test in the random arm
+  attribution: [gradcam, shap]
+  quantify_leakage: true

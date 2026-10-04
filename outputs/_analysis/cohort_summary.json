@@ -1,0 +1,99 @@
+{
+ "cohort": {
+  "patients": 740,
+  "nodules": 1695,
+  "nodules_malignant": 545,
+  "nodules_benign": 1150,
+  "slices": 11026,
+  "slices_malignant": 5504,
+  "slices_benign": 5522,
+  "slices_per_patient": {
+   "median": 11.0,
+   "q1": 5.0,
+   "q3": 20.0,
+   "min": 1.0,
+   "max": 97.0,
+   "n": 740
+  },
+  "nodules_per_patient": {
+   "median": 2.0,
+   "q1": 1.0,
+   "q3": 3.0,
+   "min": 1.0,
+   "max": 14.0,
+   "n": 740
+  },
+  "nodule_diameter_mm": {
+   "median": 8.11736420043477,
+   "q1": 6.126318206821668,
+   "q3": 12.84956878445561,
+   "min": 2.585936000000004,
+   "max": 49.94461807109529,
+   "n": 1695
+  }
+ },
+ "acquisition": {
+  "series": 748,
+  "manufacturer": {
+   "n_distinct": 4,
+   "share": {
+    "GE MEDICAL SYSTEMS": 0.6189839572192514,
+    "SIEMENS": 0.22058823529411764,
+    "Philips": 0.08823529411764706,
+    "TOSHIBA": 0.07219251336898395
+   }
+  },
+  "kernel": {
+   "n_distinct": 18,
+   "share": {
+    "STANDARD": 0.3877005347593583,
+    "BONE": 0.1537433155080214,
+    "B30f": 0.10160427807486631
+   }
+  },
+  "slice_thickness_mm": {
+   "median": 2.0,
+   "q1": 1.25,
+   "q3": 2.5,
+   "min": 0.6,
+   "max": 5.0,
+   "n": 748,
+   "n_distinct": 11
+  },
+  "in_plane_spacing_mm": {
+   "median": 0.7025625,
+   "q1": 0.626953,
+   "q3": 0.7421875,
+   "min": 0.4609375,
+   "max": 0.9765625,
+   "n": 748
+  },
+  "tube_voltage_kvp": {
+   "median": 120.0,
+   "q1": 120.0,
+   "q3": 120.0,
+   "min": 120.0,
+   "max": 140.0,
+   "n": 748
+  },
+  "tube_current_ma": {
+   "median": 241.5,
+   "q1": 80.0,
+   "q3": 320.0,
+   "min": 28.0,
+   "max": 582.0,
+   "n": 748
+  }
+ },
+ "label_clustering": {
+  "icc1": 0.3394774521248574,
+  "n0": 2.2887183110397933,
+  "mean_nodules_per_patient": 2.2905405405405403,
+  "design_effect_equal_sizes": 1.438109414566539,
+  "design_effect": 1.8952591215328098,
+  "label_pure_share": 0.7405405405405405,
+  "single_nodule_share": 0.43243243243243246,
+  "patients_multi_nodule": 420,
+  "label_pure_share_multi_nodule": 0.5428571428571428
+ }
+}

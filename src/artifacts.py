@@ -3,7 +3,7 @@
 Every analysis script needs the same two answers, and each one having its own copy is how the
 project kept shipping the same defect. The history:
 
-  * D62 -- the dataset axis was parameterised on the reading side of six scripts and left hardcoded
+  * the dataset axis was parameterised on the reading side of six scripts and left hardcoded
     on the writing side, so analysing the sensitivity cohort would have overwritten the principal
     cohort's file under the principal cohort's name.
   * 2026-08-01 -- the same shape on the architecture axis: `--archs` defaulted to the two CNNs in
@@ -29,8 +29,61 @@ import glob
 import os
 import re
 
+import pandas as pd
+
 CANONICAL_DATASET = "lidc_binary"
 _ARCH_RE = re.compile(r"_fold\d+_(.+)_none_seed\d+$")
+
+# The repository this file lives in. The analysis reads and writes the artifacts NEXT TO THE CODE,
+# not under the machine path in config.yaml (project.root): the configuration is hashed into every
+# run, so that path cannot be edited, and a clone anywhere else must recompute from its own files.
+REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+# The experiment the paper reports. Declared, not inferred from what is on disk: an architecture of
+# this set that is incomplete stops a canonical write, and any other architecture with runs on disk
+# (the one-run Swin-T timing check) is reported as a probe and left out. Only a run set covering
+# all of FULL_REPS x FULL_FOLDS writes under a canonical name (see name_for).
+REPORTED_ARCHS = ("densenet121", "efficientnet_b0", "vit_small")
+FULL_REPS = (0, 1, 2)
+FULL_FOLDS = (0, 1, 2, 3, 4)
+
+
+def outputs_dir(cfg) -> str:
+    """outputs/ of this checkout (see REPO)."""
+    return os.path.join(REPO, cfg["paths"]["outputs"])
+
+
+def read_split(path: str) -> pd.DataFrame:
+    """A committed split file, in the row order its runs were evaluated in.
+
+    Training aligned each split with the preprocessed-image index by an inner merge, which keeps
+    the split's own row order, and the coverage gate refused to train unless every row had an image.
+    The archived predictions are therefore in the split file's order, and the analysis needs no
+    preprocessing output: only the committed splits and probabilities. Callers check the alignment
+    against the length and the labels stored with the predictions.
+    """
+    s = pd.read_csv(path)
+    s["z_position"] = s["z_position"].round(2)
+    return s
+
+
+def check_aligned(split: pd.DataFrame, y_true, y_prob, tag: str) -> None:
+    """Refuse predictions that do not line up with the split rows they are said to score."""
+    if len(split) != len(y_prob):
+        raise RuntimeError(f"ALIGNMENT {tag}: {len(split)} split rows vs {len(y_prob)} predictions")
+    if (split["label"].to_numpy().astype(int) != y_true.astype(int)).any():
+        raise RuntimeError(f"LABEL MISMATCH {tag}: the split's labels are not the ones stored with "
+                           f"its predictions")
+
+
+def arms_on_disk(probs_dir: str, dataset: str, sample_unit: str) -> list[str]:
+    """Arms with at least one canonical run for this dataset and sample unit, in design order."""
+    found = []
+    for arm in ("patient", "random", "nodule"):
+        if (sample_unit, arm) in VALID_CELLS and glob.glob(os.path.join(
+                probs_dir, f"{dataset}_{sample_unit}_{arm}_rep*_fold*_*_seed42.npz")):
+            found.append(arm)
+    return found
 
 # The design has FIVE legitimate (sample unit, arm) combinations, not the 2 x 3 cross product.
 # There is no nodule-sample-unit / nodule-grouped cell: with one sample per nodule, grouping folds by
@@ -76,22 +129,30 @@ def completeness(probs_dir: str, dataset: str, arch: str, sample_units, arms, re
     return have, want
 
 
-def name_for(stem: str, dataset: str, archs, all_archs) -> str:
+def name_for(stem: str, dataset: str, archs, all_archs, reps=FULL_REPS, folds=FULL_FOLDS,
+             arms=None, all_arms=None, extra=()) -> str:
     """Output name. The bare `stem` is reserved for the principal cohort with the FULL architecture
-    set; every other combination is suffixed so it cannot be mistaken for -- or overwrite -- the
-    artifact the manuscript points at.
+    set, every repeat and fold of the reported grid, and every arm the cell has; every other
+    combination is suffixed so it cannot be mistaken for -- or overwrite -- the artifact the
+    manuscript points at.
 
     Pass all_archs=None to force a suffix, which is what a caller does when some architecture is
     incomplete: a half-finished figure or table is not the canonical one no matter which
-    architectures it nominally covers.
+    architectures it nominally covers. `extra` adds suffixes a caller needs beyond these (e.g. a
+    sample unit other than the one the canonical file holds).
     """
-    if all_archs is not None and dataset == CANONICAL_DATASET and sorted(archs) == sorted(all_archs):
-        return stem
     parts = [stem]
     if dataset != CANONICAL_DATASET:
         parts.append(dataset)
     if all_archs is None or sorted(archs) != sorted(all_archs):
         parts.append("+".join(sorted(archs)))
+    if sorted(reps) != list(FULL_REPS):
+        parts.append("reps" + "-".join(str(r) for r in sorted(reps)))
+    if sorted(folds) != list(FULL_FOLDS):
+        parts.append("folds" + "-".join(str(k) for k in sorted(folds)))
+    if arms is not None and all_arms is not None and sorted(arms) != sorted(all_arms):
+        parts.append("+".join(sorted(arms)))
+    parts += list(extra)
     return "__".join(parts)
 
 
@@ -124,8 +185,21 @@ def resolve_archs(probs_dir: str, dataset: str, requested: str | None, log=print
             else:
                 partial.append((a, have, want))
         for a, have, want in partial:
+            if a in REPORTED_ARCHS and not requested:
+                # A member of the reported experiment with a missing run is a broken grid, not a
+                # probe: dropping it would publish a two-architecture result under the canonical
+                # name.
+                raise SystemExit(f"[artifacts] {a} belongs to the reported experiment but has "
+                                 f"{have} of {want} runs for {dataset}: refusing to write a result "
+                                 f"without it. Pass --archs to run on a subset; the output name "
+                                 f"will say so.")
             log(f"[artifacts] {a}: {have} of {want} runs -- treated as a PROBE, not part of the "
                 f"experiment for {dataset}. Pass --archs explicitly to include it anyway.")
+        extra = [a for a in present if a not in REPORTED_ARCHS]
+        if extra:
+            log(f"[artifacts] {', '.join(extra)}: complete but not part of the reported experiment "
+                f"-- left out unless requested with --archs.")
+            present = [a for a in present if a in REPORTED_ARCHS]
         if not present:
             raise SystemExit(f"no architecture has a complete run set for '{dataset}'")
     if requested:

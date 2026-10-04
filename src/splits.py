@@ -1,7 +1,7 @@
 """
-STAGE 3 — seeded splits + leakage assertion (SPEC §6.3).
+Seeded splits + leakage assertion.
 
-Repeated Grouped-vs-Random K-Fold (SPEC §2.2): the seeds parameterize the repeats.
+Repeated Grouped-vs-Random K-Fold: the seeds parameterize the repeats.
 For each repeat r (seed) and fold k:
   * arm 'patient' = GroupKFold on patient_id (patients shuffled by seed r)   [Arm A]
   * arm 'random'  = KFold ignoring patient_id (samples shuffled by seed r)   [Arm B]
@@ -29,9 +29,9 @@ from src.metadata import load_config
 def _cohort(cfg, cohort="principal"):
     """Load the sample table for a cohort.
 
-    'principal' = the min_annotators>=1 cohort (cohort_main flag, D16), the headline experiment.
-    'ge3'       = the high-agreement min_annotators>=3 cohort (D16 sensitivity, label-noise),
-                  reported side by side, NEVER pooled with principal (DECISIONS D37).
+    'principal' = the min_annotators>=1 cohort (cohort_main flag), the headline experiment.
+    'ge3'       = the high-agreement min_annotators>=3 cohort (label-noise sensitivity),
+                  reported side by side, NEVER pooled with principal.
     """
     D = os.path.join(cfg["project"]["root"], cfg["paths"]["outputs"], "metadata")
     m = pd.read_csv(os.path.join(D, "lidc_master.csv"))
@@ -56,7 +56,7 @@ def make_splits(cfg, dataset, sample_unit, arm, repeats, folds, limit_patients, 
                 cohort="principal"):
     df = _cohort(cfg, cohort)
     # Distinct tag prefix for the non-principal cohort so its splits/runs can NEVER collide with
-    # the principal ones or with what the running grid reads (DECISIONS D37 safeguard 1).
+    # the principal ones or with what the running grid reads.
     dataset_tag = dataset if cohort == "principal" else f"{dataset}_{cohort}"
     if sample_unit == "nodule":
         df = df[df["is_representative_slice"]].reset_index(drop=True)
@@ -79,7 +79,7 @@ def make_splits(cfg, dataset, sample_unit, arm, repeats, folds, limit_patients, 
         elif arm == "random":
             fold_of = _fold_assign(np.arange(len(df)), folds, seed)
         elif arm == "nodule":
-            # ARM C (DECISIONS D43): group by NODULE, not by patient. All slices of one nodule stay
+            # ARM C: group by NODULE, not by patient. All slices of one nodule stay
             # on the same side (route 1, within-nodule redundancy, is ELIMINATED), but nodules are
             # assigned independently of the patient, so a patient's other nodules can land across the
             # boundary (route 2, same-patient leakage, stays ACTIVE) -- at FULL per-patient sample
@@ -138,7 +138,7 @@ def _assert_leakage(train, val, test, arm):
         assert tr.isdisjoint(va), "LEAKAGE: patient_id overlap train/val in patient arm"
         assert va.isdisjoint(te), "LEAKAGE: patient_id overlap val/test in patient arm"
     elif arm == "nodule":
-        # ARM C must prove BOTH halves of its design, or it does not isolate route 2 (D43):
+        # ARM C must prove BOTH halves of its design, or it does not isolate route 2:
         ntr, nva, nte = set(train.nodule_id), set(val.nodule_id), set(test.nodule_id)
         assert ntr.isdisjoint(nte), "LEAKAGE: nodule_id overlap train/test in nodule arm"
         assert ntr.isdisjoint(nva), "LEAKAGE: nodule_id overlap train/val in nodule arm"
@@ -152,20 +152,20 @@ def _assert_leakage(train, val, test, arm):
 
 
 def main():
-    ap = argparse.ArgumentParser(description="STAGE 3 — seeded Grouped-vs-Random K-Fold splits.")
+    ap = argparse.ArgumentParser(description="Seeded Grouped-vs-Random K-Fold splits.")
     ap.add_argument("--config", default="config.yaml")
     ap.add_argument("--dataset", default="lidc_binary")
     ap.add_argument("--sample-unit", default="slice", choices=["slice", "nodule"])
     ap.add_argument("--arm", default="patient", choices=["patient", "random", "nodule"],
                     help="patient = arm A (GroupKFold on patient); random = arm B (KFold, no "
-                         "grouping); nodule = ARM C (D43): grouped by nodule_id, so within-nodule "
+                         "grouping); nodule = ARM C: grouped by nodule_id, so within-nodule "
                          "redundancy is eliminated but same-patient leakage stays active at full "
                          "sample density -- isolates the patient route")
     ap.add_argument("--repeats", type=int, default=1)
     ap.add_argument("--folds", type=int, default=5)
     ap.add_argument("--limit-patients", type=int, default=0, help="0=all; >0 = subset for validation")
     ap.add_argument("--cohort", default="principal", choices=["principal", "ge3"],
-                    help="principal = min_annotators>=1 (headline); ge3 = >=3 sensitivity (D37), "
+                    help="principal = min_annotators>=1 (headline); ge3 = >=3 sensitivity, "
                          "distinct tag lidc_binary_ge3_...")
     args = ap.parse_args()
     cfg = load_config(args.config)

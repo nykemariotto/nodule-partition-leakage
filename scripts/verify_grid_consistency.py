@@ -1,23 +1,24 @@
 """
-GRID INTERNAL-CONSISTENCY GATE — the whole grid must be ONE experiment (D34 §internal consistency),
-AND that one experiment must be the one the config DECLARES (D48).
+GRID INTERNAL-CONSISTENCY GATE — the whole grid must be ONE experiment, AND that one experiment
+must be the one the config DECLARES.
 
 A grid runs for days over hundreds of runs, across crashes and resumes. Averaging a metric over runs
 trained under different settings would silently mix experiments. But mutual agreement is not enough:
-three times now (`--max-epochs 8` in the sanity stage, hardcoded `channels_last`, `--patience 30` in
-the grid) every run agreed with every other run and all of them disagreed with `config.yaml`. A gate
+three times (`--max-epochs 8` in the pilot, hardcoded `channels_last`, `--patience 30` in the
+grid) every run agreed with every other run and all of them disagreed with `config.yaml`. A gate
 that only compares runs TO EACH OTHER passes all three. So this gate checks both directions:
 
-  * config_sha256   — the parsed-config hash stamped by src/train.py (D25); one value across the grid.
+  * config_sha256   — the parsed-config hash stamped by src/train.py; one value across the grid.
   * max_epochs      — stamped value must EQUAL config.train.max_epochs (not merely be uniform).
                       CLI overrides do not change the config file, so the hash alone cannot see them.
-  * checkpoint      — CHECKPOINT EQUIVALENCE, not stamp equality (D47). A run is valid iff the
-    equivalence     checkpoint it actually selected is the one the pre-registered protocol
+  * checkpoint      — CHECKPOINT EQUIVALENCE, not stamp equality. A run is valid iff the
+    equivalence     checkpoint it actually selected is the one the prespecified protocol
                       (config.train.early_stopping_patience) would have selected. This is recomputed
                       here from each run's stored val-loss trajectory, so it does not trust the
                       stamped `patience`/`best_epoch` at all. A run trained with a larger patience is
-                      still valid IF its selected checkpoint lies inside the pre-registered window —
-                      which is exactly how 111 of the 120 runs of the first grid qualified.
+                      still valid IF its selected checkpoint lies inside the prespecified window —
+                      which is exactly how 110 of the 120 runs of the first grid qualified; the
+                      other 10 were retrained.
 
 Exit 0 = the grid is one experiment and it is the declared one. Exit 1 = do not average or report.
 
@@ -35,12 +36,14 @@ from collections import defaultdict
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from src.metadata import load_config
+from src.config_contract import config_hash
+from src.artifacts import outputs_dir
 
 TOL = 1e-4
 
 
 def canonical_epoch(history, patience, tol=TOL):
-    """(selected_epoch, stop_epoch) under the pre-registered protocol.
+    """(selected_epoch, stop_epoch) under the prespecified protocol.
 
     selected_epoch = argmin(val_loss) among epochs up to the point where `patience` consecutive
     non-improvements would have stopped training; stop_epoch = that stopping point (None if the
@@ -70,10 +73,11 @@ def main():
     ap.add_argument("--json", default=None,
                     help="write the offending runs (parsed into su/arm/rep/fold/arch) to this path. "
                          "Lets a repair script derive its work list from THIS gate -- the source of "
-                         "truth -- instead of a hardcoded list that silently goes stale (D49).")
+                         "truth -- instead of a hardcoded list that silently goes stale.")
     args = ap.parse_args()
     cfg = load_config(args.config)
-    hdir = os.path.join(cfg["project"]["root"], cfg["paths"]["outputs"], "history")
+    hdir = os.path.join(outputs_dir(cfg), "history")
+    declared = config_hash(cfg)
     cfg_me = int(cfg["train"]["max_epochs"])
     cfg_pat = int(cfg["train"]["early_stopping_patience"])
 
@@ -93,23 +97,29 @@ def main():
         n += 1
         groups[stamp].append(run)
 
-        # --- against the CONFIG, not merely against each other (D48) ---
+        # --- against the CONFIG, not merely against each other ---
         if h.get("max_epochs") != cfg_me:
             bad_epochs.append((run, h.get("max_epochs")))
 
-        # --- checkpoint equivalence, recomputed from the trajectory (D47) ---
+        # --- checkpoint equivalence, recomputed from the trajectory ---
         hist = h.get("history") or []
         if hist:
             sel_ep, stop_ep = canonical_epoch(hist, cfg_pat)
             if sel_ep is not None and h.get("best_epoch") != sel_ep:
                 bad_ckpt.append((run, h.get("best_epoch"), sel_ep, stop_ep))
 
-    print(f"canonical runs inspected: {n} | unstamped (pre-D25): {len(unstamped)}")
+    print(f"canonical runs inspected: {n} | unstamped: {len(unstamped)}")
     for stamp, runs in groups.items():
         print(f"  group config {stamp[:12] if stamp else 'NONE'}: {len(runs)} runs")
-    print(f"config declares: max_epochs {cfg_me} · early_stopping_patience {cfg_pat}")
+    print(f"config declares: sha256 {declared[:12]} · max_epochs {cfg_me} · "
+          f"early_stopping_patience {cfg_pat}")
 
     failed = False
+    if n == 0:
+        # A gate that finds nothing must not report success: an empty glob (a wrong path, a clone
+        # without its outputs) would otherwise print "all 0 canonical checkpoints" and exit 0.
+        print(f"\nFAIL: no canonical run matched {args.glob!r} under {hdir}")
+        failed = True
     if args.require_stamp and unstamped:
         print(f"\nFAIL: {len(unstamped)} run(s) have no config stamp: {unstamped[:5]}")
         failed = True
@@ -119,6 +129,14 @@ def main():
         for stamp, runs in stamped.items():
             print(f"  {stamp[:12]}: {sorted(runs)[:3]} ...({len(runs)})")
         failed = True
+    # ...and that one configuration must be the file on disk, not merely shared by the runs.
+    foreign = {k: v for k, v in stamped.items() if k != declared}
+    if foreign:
+        print(f"\nFAIL: {sum(len(v) for v in foreign.values())} run(s) carry a config_sha256 that "
+              f"is not the hash of {args.config} ({declared[:12]}):")
+        for stamp, runs in foreign.items():
+            print(f"  {stamp[:12]}: {sorted(runs)[:3]} ...({len(runs)})")
+        failed = True
     if bad_epochs:
         print(f"\nFAIL: {len(bad_epochs)} run(s) stamped a max_epochs that DISAGREES with "
               f"config.train.max_epochs={cfg_me} (a CLI override the config hash cannot see):")
@@ -126,8 +144,8 @@ def main():
             print(f"  {run}: stamped {me}")
         failed = True
     if bad_ckpt:
-        print(f"\nFAIL: {len(bad_ckpt)} run(s) selected a checkpoint the pre-registered protocol "
-              f"(patience {cfg_pat}) would NOT have selected — retrain them (D47):")
+        print(f"\nFAIL: {len(bad_ckpt)} run(s) selected a checkpoint the prespecified protocol "
+              f"(patience {cfg_pat}) would NOT have selected — retrain them:")
         for run, be, sel, stop in bad_ckpt[:12]:
             print(f"  {run}: selected epoch {be}, protocol would select {sel} "
                   f"(window closes at {stop})")
@@ -156,8 +174,9 @@ def main():
 
     if failed:
         return 1
-    print(f"\nOK — one config; max_epochs matches the config; and all {n} canonical checkpoints are "
-          f"the ones the pre-registered patience-{cfg_pat} protocol would select.")
+    print(f"\nOK — one config, and it is {args.config}; max_epochs matches it; and all {n} "
+          f"canonical checkpoints are the ones the prespecified patience-{cfg_pat} protocol would "
+          f"select.")
     return 0
 
 

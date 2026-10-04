@@ -1,5 +1,5 @@
 """
-STAGE 2 — deterministic preprocessing (SPEC §6.2, §4).
+Deterministic preprocessing.
 
 For every labelled nodule (pylidc cluster, re-derived exactly as in metadata.py) and each
 slice it spans, produce a 256x256x3 float32 array in [0,1]:
@@ -10,7 +10,7 @@ slice it spans, produce a 256x256x3 float32 array in [0,1]:
   4. Optional enhancement (preprocess.enhancement: none | clahe) — CONTROLLED ABLATION FACTOR.
   5. Resize to 256x256 (preprocess.input_size); replicate the single channel to 3.
 
-Deterministic: no randomness anywhere (augmentation is TRAIN-only, STAGE 4). Held identical
+Deterministic: no randomness anywhere (augmentation is TRAIN-only, in training). Held identical
 across split arms. Writes .npy arrays + a processed index CSV.
 
     python -m src.preprocess --config config.yaml                 # full cohort
@@ -164,7 +164,7 @@ def process_scan(scan, cfg, enhancement, out_root):
 
 
 def main():
-    ap = argparse.ArgumentParser(description="STAGE 2 — deterministic preprocessing.")
+    ap = argparse.ArgumentParser(description="Deterministic preprocessing.")
     ap.add_argument("--config", default="config.yaml")
     ap.add_argument("--limit-scans", type=int, default=0, help="0 = all; >0 = validation subset")
     ap.add_argument("--enhancement", default=None, help="override preprocess.enhancement_principal")

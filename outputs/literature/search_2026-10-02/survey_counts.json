@@ -1,0 +1,71 @@
+{
+ "flow": {
+  "identified": {
+   "pubmed": 32,
+   "europepmc": 31,
+   "openalex": 94,
+   "deduplicated": 99
+  },
+  "deduplicated": 99,
+  "excluded_title_abstract": 14,
+  "sought_full_text": 85,
+  "not_retrieved": {
+   "not retrieved (subscription only)": 15,
+   "not retrieved (free to read in PubMed Central, not retrievable by script)": 1,
+   "not retrieved (open access, not retrievable by script)": 2,
+   "not retrieved (removed by the publisher)": 1
+  },
+  "read": 66,
+  "excluded_full_text": 7,
+  "included": 59
+ },
+ "tally": {
+  "patient": 23,
+  "not stated": 6,
+  "nodule": 14,
+  "scan": 3,
+  "image, slice or patch": 9,
+  "no split described": 3,
+  "other": 1
+ },
+ "borderline": [
+  9,
+  15,
+  42,
+  65,
+  67,
+  71,
+  86,
+  91,
+  92
+ ],
+ "tally_without_borderline": {
+  "patient": 22,
+  "not stated": 3,
+  "nodule": 14,
+  "image, slice or patch": 8,
+  "no split described": 2,
+  "scan": 1
+ },
+ "reported_accuracy": 56,
+ "reported_auc": 40,
+ "accuracy_above_95": 26,
+ "accuracy_above_95_by_unit": {
+  "patient": 8,
+  "not stated": 5,
+  "scan": 2,
+  "no split described": 2,
+  "image, slice or patch": 6,
+  "nodule": 2,
+  "other": 1
+ },
+ "auc_above_098": 11,
+ "auc_above_098_by_unit": {
+  "patient": 4,
+  "not stated": 1,
+  "scan": 1,
+  "no split described": 1,
+  "image, slice or patch": 4
+ },
+ "auc_above_099": 1
+}

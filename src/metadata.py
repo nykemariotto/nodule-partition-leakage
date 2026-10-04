@@ -1,16 +1,16 @@
 """
-STAGE 1 — Master metadata table for the LIDC-IDRI study (SPEC §6.1, v2).
+Master metadata table for the LIDC-IDRI study.
 
 Builds, from the pylidc annotation database + on-disk DICOM:
   * a per-sample master table  (patient_id, nodule_id, slice_id, label, path, ...)
   * a per-nodule table         (consensus label, #annotators, diameter, flags, ...)
   * a dataset-accounting report answering the nodule-vs-annotation counting
     question explicitly (both counts), plus the exclusion funnel and the >4-annotator
-    over-merge flag report (Decision 3).
+    over-merge flag report.
 
 The master table is a SUPERSET (every labelled nodule, min_annotators>=1). Two flags let
-downstream stages select cohorts without rebuilding (SPEC v2):
-  * `cohort_main`             = n_annotators >= metadata.min_annotators_principal (=1, D16 reversal).
+downstream stages select cohorts without rebuilding:
+  * `cohort_main`             = n_annotators >= metadata.min_annotators_principal (=1).
   * `is_representative_slice` = the nodule's largest-cross-section slice (sample_unit=nodule).
 
 Unit of analysis:
@@ -22,7 +22,7 @@ Label (config `label`): per-nodule consensus = median of the malignancy scores.
     median > 3 -> malignant (1);  median < 3 -> benign (0);  median == 3 -> excluded.
 <3 mm markings, non-nodules and malignancy=0 are not labelled (excluded by construction).
 
-Over-merge guard (Decision 3): nodules with > over_merge_flag_threshold (=4) annotators
+Over-merge guard: nodules with > over_merge_flag_threshold (=4) annotators
 are FLAGGED (`flag_over_merge`), never split; count + label breakdown go in the accounting.
 
 No split or training logic here. Deterministic; no randomness.
@@ -339,7 +339,7 @@ def write_accounting(records, nodules_df, samples_df, series_map, cfg, out_dir):
     labelled = int(nodules_df["label"].notna().sum())
     ann_per_nodule = Counter(nodules_df["n_annotators"])
 
-    # over-merge report (Decision 3)
+    # over-merge report
     over = nodules_df[nodules_df["flag_over_merge"]]
     over_report = {
         "threshold": over_thr,
@@ -386,12 +386,12 @@ def write_accounting(records, nodules_df, samples_df, series_map, cfg, out_dir):
         json.dump(data, f, indent=2)
 
     md = []
-    md.append("# LIDC-IDRI dataset accounting (STAGE 1, v2)\n")
+    md.append("# LIDC-IDRI dataset accounting\n")
     md.append(f"_Generated {data['generated_utc']} · {data['engine']} · "
               f"principal cohort = min_annotators >= {principal}_\n")
     md.append("## Unit of analysis: annotation vs nodule — both reported\n")
     md.append("- **Annotation** = one radiologist's reading of a >=3 mm nodule "
-              "(one malignancy score + contours); a physical nodule carries 1-4 annotations.\n"
+              "(one malignancy score + contours); a physical nodule usually carries 1-4 annotations.\n"
               "- **Nodule** = a physical lesion (pylidc clustering). Labelling/grouping unit = "
               "the **nodule**. Both counts reported.\n")
     md.append("## Counting funnel\n")
@@ -403,7 +403,7 @@ def write_accounting(records, nodules_df, samples_df, series_map, cfg, out_dir):
     md.append("### Annotators per nodule\n")
     for k, v in sorted(ann_per_nodule.items()):
         md.append(f"- {k}: {int(v)} nodules\n")
-    md.append(f"## Over-merge flag (Decision 3 — >{over_thr} annotators, flagged not split)\n")
+    md.append(f"## Over-merge flag (>{over_thr} annotators, flagged not split)\n")
     md.append(f"- Flagged nodules: **{over_report['n_flagged']}** "
               f"({over_report['n_flagged']*100.0/max(total_nodules,1):.1f}% of nodules); "
               f"label breakdown: {over_report['label_breakdown']}\n")
@@ -433,7 +433,7 @@ def write_accounting(records, nodules_df, samples_df, series_map, cfg, out_dir):
 
 # ------------------------------------------------------------------- main
 def main():
-    ap = argparse.ArgumentParser(description="STAGE 1 — build LIDC master metadata table.")
+    ap = argparse.ArgumentParser(description="Build the LIDC master metadata table.")
     ap.add_argument("--config", default="config.yaml")
     args = ap.parse_args()
 

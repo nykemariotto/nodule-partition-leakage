@@ -13,8 +13,9 @@ rather than guessed at.
 
 **What it is not.** A purposive, non-systematic sample, assembled to characterise how the partition
 unit is reported. The counts describe the studies we read; they are not an estimate of a field-wide
-rate. What they establish is that partitioning below the patient, and not reporting the unit at all,
-are both common enough to find immediately among the best-performing papers.
+rate. What they show is that partitioning below the patient, and not reporting the unit at all, both
+occur among high-performing studies; how often they occur is what the structured search in the
+article's Related Work measures.
 
 **Verification.** Assembled 2026-07-23. On 2026-08-05 an author opened each of the ten studies and
 checked both the quote and the classification against the paper's own text: 10/10 quotes verbatim,

@@ -1,7 +1,7 @@
 # Cross-validation partition indices
 
 These files **are** the experiment. Every result in the paper is a comparison between models trained
-on the partitions defined here, so they are committed rather than regenerated — a reviewer can check
+on the partitions defined here, so they are committed rather than regenerated — anyone can check
 the partitioning claim without running anything, and a rerun cannot silently produce different folds.
 
 ## Naming
@@ -54,8 +54,10 @@ python -m src.splits --config config.yaml --dataset lidc_binary \
     --sample-unit slice --arm patient --repeats 3 --folds 5
 ```
 `--arm {patient,random,nodule}`, `--cohort {principal,ge3}`. Generation is seeded and deterministic:
-regenerating overwrites these files with identical content. The leakage assertions run at generation
-time and fail loudly rather than warning.
+regenerating, followed by `python scripts/relativise_paths.py` (which makes the `path` column
+relative, as described below), overwrites these files with identical content. The leakage assertions run at generation
+time and fail loudly rather than warning, and `python scripts/verify_leakage.py` re-checks them on
+these committed files and exports the result to `outputs/metrics/leakage_assertion.txt`.
 
 ## The `path` column, and why these files are larger than usual
 
@@ -63,14 +65,12 @@ Each row carries the full sample metadata rather than a bare identifier, which m
 roughly an order of magnitude larger than the identifier lists other repositories ship. Only
 `patient_id`, `nodule_id`, `slice_id`, `z_position` and `label` are needed to reconstruct a
 partition; the remaining columns are redundant for that purpose. The format is kept because the
-analysis code aligns archived predictions to these rows by `nodule_id` + `z_position`, and changing
-the alignment keys would invalidate the runs already on disk.
+training loader matched these rows to the preprocessed images by `nodule_id` + `z_position`, and the
+archived predictions follow the rows in the order of these files; the analysis checks each run's
+predictions against the length and labels of its split file.
 
-The `path` column previously held an absolute path from the machine that generated it
-(`E:\NODULES\LIDC-IDRI\...`), which meant these indices resolved on exactly one computer — a defect
-in files offered as independently executable. It is now **relative to the repository root, with
-forward slashes**, so it resolves anywhere once the raw data are placed under the root documented in
-`data/README.md`. The DICOM provenance is unchanged: the manifest directory, the series directory and
-the instance number are all still there, so any row can be traced back to its file in the TCIA
-distribution. Nothing reads this column — images are loaded through `processed_path` in the
-preprocessed index — so it is descriptive, and the rewrite left every other column byte-identical.
+The `path` column is **relative to the repository root, with forward slashes**, so it resolves on
+any machine once the raw data are placed as documented in `data/README.md`. It keeps the DICOM
+provenance in full: the manifest directory, the series directory and the instance number, so any
+row can be traced back to its file in the TCIA distribution. Nothing reads this column — images are
+loaded through `processed_path` in the preprocessed index — so it is descriptive.

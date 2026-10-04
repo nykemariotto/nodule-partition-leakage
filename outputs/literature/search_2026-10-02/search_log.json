@@ -1,0 +1,15 @@
+{
+ "date": "2026-10-02",
+ "queries": {
+  "pubmed": "(\"LIDC-IDRI\"[tiab] OR \"LIDC\"[tiab] OR \"Lung Image Database Consortium\"[tiab] OR \"LUNA16\"[tiab]) AND (malignan*[tiab] OR benign*[tiab]) AND (\"deep learning\"[tiab] OR convolutional[tiab] OR \"neural network\"[tiab] OR \"neural networks\"[tiab] OR transformer*[tiab] OR CNN[tiab]) AND (\"2025/01/01\"[dp] : \"3000\"[dp])",
+  "europepmc": "((TITLE:\"LIDC-IDRI\" OR ABSTRACT:\"LIDC-IDRI\") OR (TITLE:LIDC OR ABSTRACT:LIDC) OR (TITLE:\"Lung Image Database Consortium\" OR ABSTRACT:\"Lung Image Database Consortium\") OR (TITLE:LUNA16 OR ABSTRACT:LUNA16)) AND ((TITLE:malignan* OR ABSTRACT:malignan*) OR (TITLE:benign* OR ABSTRACT:benign*)) AND ((TITLE:\"deep learning\" OR ABSTRACT:\"deep learning\") OR (TITLE:convolutional OR ABSTRACT:convolutional) OR (TITLE:\"neural network\" OR ABSTRACT:\"neural network\") OR (TITLE:\"neural networks\" OR ABSTRACT:\"neural networks\") OR (TITLE:transformer* OR ABSTRACT:transformer*) OR (TITLE:CNN OR ABSTRACT:CNN)) AND (PUB_YEAR:[2025 TO 2026]) NOT (SRC:PPR)",
+  "openalex": "(LIDC OR \"LIDC-IDRI\" OR \"Lung Image Database Consortium\" OR LUNA16) AND (malignant OR malignancy OR benign) AND (\"deep learning\" OR convolutional OR \"neural network\" OR transformer OR CNN)",
+  "openalex_filter": "publication_year:2025-2026, type:article|proceedings-article"
+ },
+ "counts": {
+  "pubmed": 32,
+  "europepmc": 31,
+  "openalex": 94,
+  "deduplicated": 99
+ }
+}

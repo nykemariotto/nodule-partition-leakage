@@ -5,7 +5,7 @@ DETERMINISTIC matplotlib figure — NO randomness, NO external assets, NO networ
 synthesis. Renders schematic.png (400 dpi) and schematic.pdf (vector). Run with the `nodules` env:
     python figures/schematic.py                             (environment: environment.yml)
 
-SCOPE (D65, revised D73): the MAIN design only. The >=3-annotator cohort is a sensitivity analysis
+SCOPE: the MAIN design only. The >=3-annotator cohort is a sensitivity analysis
 and belongs in its own figure; do not fold it in. The three ARCHITECTURES, however, are all part of
 the main design as of 2026-08-03 -- the transformer arm is not a sensitivity analysis -- so the
 Backbone field lists all three. swin_tiny is a one-run timing probe and must never appear here.
@@ -24,7 +24,7 @@ with its own data (the project's figure gate requires it). If an artifact is mis
 FAILS rather than falling back to a literal -- a hardcoded number is exactly how a figure silently
 desynchronises from the data it claims to describe. No performance value is depicted.
 
-DESIGN RULES (D66) — what makes a method schematic read as publication-grade is not the drawing
+DESIGN RULES — what makes a method schematic read as publication-grade is not the drawing
 engine, so these constraints are deliberate and should survive future edits:
   * Type: ONE family (Arial, the journal standard), THREE sizes. Nothing else.
   * Colour: Okabe-Ito, colourblind-safe, and never the ONLY channel. One hue per arm, carried by
@@ -183,7 +183,7 @@ def field(ax, x, y, w, h, title, lines, size=None):
     stack of short lines. It may only be one of the three sizes in the scale.
     """
     size = FS_BODY if size is None else size
-    assert size in (FS_TITLE, FS_BODY, FS_TINY), "one family, three sizes — nothing else (D66)"
+    assert size in (FS_TITLE, FS_BODY, FS_TINY), "one family, three sizes — nothing else"
     ax.add_patch(Rectangle((x, y), w, h, facecolor=FIELD, edgecolor="none", zorder=1))
     ax.text(x + w / 2, y + h - 3.4, title, ha="center", va="top", fontsize=FS_TITLE,
             fontweight="bold", color=INK, zorder=3)
@@ -229,7 +229,7 @@ def main():
 
     # Drawn at the IEEE two-column text width, so \includegraphics[width=\textwidth] neither
     # enlarges nor shrinks it and the type prints at the size it is set in. Drawing wider and
-    # letting LaTeX fit it to the column is what took Figs. 2 and 3 below the 7 pt floor (D76);
+    # letting LaTeX fit it to the column is what took Figs. 2 and 3 below the 7 pt floor once;
     # at 9.2 in it would put this figure's body text at 6.0 pt.
     fig, ax = plt.subplots(figsize=(PAGE_W, 5.0))
     ax.set_xlim(0, W); ax.set_ylim(0, H); ax.axis("off")
@@ -260,7 +260,7 @@ def main():
     body_texts = [field(ax, x, y_pipe, pw, h_pipe, title, lines, size)
                   for (title, lines, size), x in zip(pipe, xs)]
     # Does the text actually FIT the box it is in? Measured, not eyeballed. A line that overruns its
-    # tint field is the exact failure that shipped once already (D78), and it is invisible in the
+    # tint field is the exact failure that shipped once already, and it is invisible in the
     # source: it depends on the font, the size and the string, none of which the geometry knows.
     fig.canvas.draw()
     rend = fig.canvas.get_renderer()
@@ -275,7 +275,7 @@ def main():
         ax.add_patch(FancyArrow(xs[i] + pw + 1.2, y_pipe + h_pipe / 2, gap - 2.4, 0, width=0.25,
                                 head_width=1.5, head_length=1.6, length_includes_head=True,
                                 color=MUTED, zorder=3))
-    ax.text(W / 2, Y_CAP, "Cohort, labels, preprocessing, architecture and optimiser are identical "
+    ax.text(W / 2, Y_CAP, "Cohort, labels, preprocessing, architecture and optimizer are identical "
             "across all three arms", ha="center", va="center", fontsize=FS_BODY, style="italic",
             color=MUTED)
 
@@ -286,7 +286,7 @@ def main():
     ax.plot([W / 2, W / 2], [y_pipe, Y_BUS], color=HAIR, lw=0.8, zorder=1)
     ax.plot([cols["A"] + cw_col / 2, cols["B"] + cw_col / 2], [Y_BUS, Y_BUS],
             color=HAIR, lw=0.8, zorder=1)
-    ax.text(W / 2, (y_pipe + Y_BUS) / 2, "the partition unit is the only thing that changes",
+    ax.text(W / 2, (y_pipe + Y_BUS) / 2, "only the partition unit is manipulated",
             ha="center", va="center", fontsize=FS_TINY, color=MUTED, zorder=4,
             bbox=dict(boxstyle="square,pad=0.32", fc="white", ec="none"))
 

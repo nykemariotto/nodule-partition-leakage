@@ -1,5 +1,5 @@
 {
- "_note": "CM counts summed over ALL test folds of each condition -- 3 repeats x 5 folds. Within ONE repeat the patient- and nodule-grouped folds partition their grouping unit, so each nodule is scored once per repeat and THREE times in these totals; the earlier wording said 'scored once', which is true per repeat and wrong for the numbers reported here. The random condition's test folds OVERLAP by construction (leaky protocol), so a nodule falls in ~3.2 of the 5 folds and its totals are correspondingly larger. F1 == 2PR/(P+R) asserted (B9). threshold 0.5, nodule level.",
+ "_note": "Nodule level, threshold 0.5, one prediction per nodule per repeat: each repeat's five test folds are pooled before a nodule's slice probabilities are averaged, so every nodule is scored once per repeat in EVERY condition, including the random one, whose slice-level folds spread a nodule over several test folds. Counts are summed over the repeats ('repeats' says how many); accuracy, F1, precision and recall are the means of the per-repeat values, and 'from_summed_counts' holds them recomputed from the summed counts. Same estimator as scripts/nodule_oof.py. F1 == 2PR/(P+R) asserted within each repeat.",
  "arms": [
   "patient",
   "nodule",
@@ -28,30 +28,51 @@
     "tn": 3102,
     "fp": 348,
     "fn": 350,
-    "precision": 0.7868952847519902,
-    "recall": 0.7859327217125383,
-    "f1": 0.7864137086903306,
-    "accuracy": 0.8627335299901672
+    "precision": 0.7871595132030703,
+    "recall": 0.7859327217125381,
+    "f1": 0.7864940525446062,
+    "accuracy": 0.8627335299901672,
+    "repeats": 3,
+    "from_summed_counts": {
+     "precision": 0.7868952847519902,
+     "recall": 0.7859327217125383,
+     "f1": 0.7864137086903306,
+     "accuracy": 0.8627335299901672
+    }
    },
    "nodule": {
     "tp": 1279,
     "tn": 3091,
     "fp": 359,
     "fn": 356,
-    "precision": 0.7808302808302808,
+    "precision": 0.7810608561139888,
     "recall": 0.782262996941896,
-    "f1": 0.7815459822792545,
-    "accuracy": 0.8593903638151426
+    "f1": 0.7814769614991693,
+    "accuracy": 0.8593903638151424,
+    "repeats": 3,
+    "from_summed_counts": {
+     "precision": 0.7808302808302808,
+     "recall": 0.782262996941896,
+     "f1": 0.7815459822792545,
+     "accuracy": 0.8593903638151426
+    }
    },
    "random": {
-    "tp": 5763,
-    "tn": 9306,
-    "fp": 732,
-    "fn": 708,
-    "precision": 0.8872979214780601,
-    "recall": 0.8905887807139545,
-    "f1": 0.8889403054141601,
-    "accuracy": 0.9127748500817736
+    "tp": 1441,
+    "tn": 3278,
+    "fp": 172,
+    "fn": 194,
+    "precision": 0.8933497562053533,
+    "recall": 0.8813455657492355,
+    "f1": 0.887298200824647,
+    "accuracy": 0.9280235988200589,
+    "repeats": 3,
+    "from_summed_counts": {
+     "precision": 0.8933663980161191,
+     "recall": 0.8813455657492355,
+     "f1": 0.8873152709359605,
+     "accuracy": 0.928023598820059
+    }
    }
   },
   "efficientnet_b0": {
@@ -60,30 +81,51 @@
     "tn": 3037,
     "fp": 413,
     "fn": 373,
-    "precision": 0.7534328358208955,
-    "recall": 0.7718654434250765,
-    "f1": 0.7625377643504531,
-    "accuracy": 0.8454277286135693
+    "precision": 0.7559144912888952,
+    "recall": 0.7718654434250766,
+    "f1": 0.7623100443362613,
+    "accuracy": 0.8454277286135694,
+    "repeats": 3,
+    "from_summed_counts": {
+     "precision": 0.7534328358208955,
+     "recall": 0.7718654434250765,
+     "f1": 0.7625377643504531,
+     "accuracy": 0.8454277286135693
+    }
    },
    "nodule": {
     "tp": 1271,
     "tn": 3005,
     "fp": 445,
     "fn": 364,
-    "precision": 0.7406759906759907,
+    "precision": 0.7417426209866242,
     "recall": 0.7773700305810397,
-    "f1": 0.7585795284989555,
-    "accuracy": 0.8409046214355949
+    "f1": 0.7584401498979784,
+    "accuracy": 0.840904621435595,
+    "repeats": 3,
+    "from_summed_counts": {
+     "precision": 0.7406759906759907,
+     "recall": 0.7773700305810397,
+     "f1": 0.7585795284989555,
+     "accuracy": 0.8409046214355949
+    }
    },
    "random": {
-    "tp": 5813,
-    "tn": 9287,
-    "fp": 751,
-    "fn": 658,
-    "precision": 0.885588056063376,
-    "recall": 0.8983155617369804,
-    "f1": 0.8919064058304564,
-    "accuracy": 0.9146526137258465
+    "tp": 1450,
+    "tn": 3291,
+    "fp": 159,
+    "fn": 185,
+    "precision": 0.9011798635643474,
+    "recall": 0.8868501529051988,
+    "f1": 0.8939553415255826,
+    "accuracy": 0.9323500491642086,
+    "repeats": 3,
+    "from_summed_counts": {
+     "precision": 0.9011808576755749,
+     "recall": 0.8868501529051988,
+     "f1": 0.8939580764488285,
+     "accuracy": 0.9323500491642085
+    }
    }
   },
   "vit_small": {
@@ -92,30 +134,51 @@
     "tn": 2881,
     "fp": 569,
     "fn": 321,
-    "precision": 0.6978226234731811,
+    "precision": 0.6997248415853198,
     "recall": 0.8036697247706422,
-    "f1": 0.7470153496304719,
-    "accuracy": 0.8249754178957719
+    "f1": 0.7473568687957451,
+    "accuracy": 0.8249754178957719,
+    "repeats": 3,
+    "from_summed_counts": {
+     "precision": 0.6978226234731811,
+     "recall": 0.8036697247706422,
+     "f1": 0.7470153496304719,
+     "accuracy": 0.8249754178957719
+    }
    },
    "nodule": {
     "tp": 1335,
     "tn": 2965,
     "fp": 485,
     "fn": 300,
-    "precision": 0.7335164835164835,
-    "recall": 0.8165137614678899,
-    "f1": 0.7727930535455861,
-    "accuracy": 0.8456243854473943
+    "precision": 0.733571818764692,
+    "recall": 0.81651376146789,
+    "f1": 0.7727799969250514,
+    "accuracy": 0.8456243854473943,
+    "repeats": 3,
+    "from_summed_counts": {
+     "precision": 0.7335164835164835,
+     "recall": 0.8165137614678899,
+     "f1": 0.7727930535455861,
+     "accuracy": 0.8456243854473943
+    }
    },
    "random": {
-    "tp": 5789,
-    "tn": 9114,
-    "fp": 924,
-    "fn": 682,
-    "precision": 0.862356621480709,
-    "recall": 0.894606706845928,
-    "f1": 0.8781856796116505,
-    "accuracy": 0.9027197286328669
+    "tp": 1454,
+    "tn": 3226,
+    "fp": 224,
+    "fn": 181,
+    "precision": 0.866885258150083,
+    "recall": 0.889296636085627,
+    "f1": 0.8777871047945268,
+    "accuracy": 0.9203539823008849,
+    "repeats": 3,
+    "from_summed_counts": {
+     "precision": 0.866507747318236,
+     "recall": 0.8892966360856269,
+     "f1": 0.8777543012375492,
+     "accuracy": 0.9203539823008849
+    }
    }
   }
  }

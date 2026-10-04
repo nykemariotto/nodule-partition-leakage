@@ -1,5 +1,5 @@
 """
-STATIC AUDIT of the config-code contract (DECISIONS D27 / D23).
+STATIC AUDIT of the config-code contract.
 
 `src/config_contract.assert_contract` runs at every training start, but it can only check that
 each config key is DECLARED. It cannot check whether a key declared `consumed` is still read by
@@ -9,7 +9,9 @@ same failure mode, one level up: a description that the code does not implement.
 This script closes that hole by checking the declarations against the source:
 
   1. every config key is declared, and every declaration still has a config key (same as runtime);
-  2. every key declared `consumed` actually appears as a quoted string in src/ or scripts/;
+  2. every key declared `consumed` is actually read: its leaf AND its parent segment appear as
+     quoted strings in the same file under src/ or scripts/ (a leaf alone is not enough: a generic
+     name such as `train` or `val` is quoted in many files that never read the config key);
   3. no key declared `hardcoded` / `documentation` / `deferred` is in fact being read
      (it should be re-declared `consumed` — a stale status is drift too);
   4. reports what is `deferred`, because those must never be described as done in the manuscript.
@@ -42,26 +44,21 @@ def source_text(root, dirs=("src", "scripts")):
     return out
 
 
-def is_read(leaf, sources, skip=("config_contract.py",)):
-    """Does any source file index a key by this leaf name? Returns the files that do."""
-    pat = re.compile(r'["\']' + re.escape(leaf) + r'["\']')
-    return [f for f, t in sources.items()
-            if not f.endswith(skip) and pat.search(t)]
-
-
 def is_read_pathaware(key, sources, skip=("config_contract.py",)):
-    """Like is_read, but for a dotted key requires BOTH the leaf AND its parent segment to
-    appear (quoted) in the same file. Kills false positives on generic leaf names: e.g. the
-    config key `ensemble.method` must not be flagged merely because `src/evaluate.py` accesses
-    a McNemar result field `mcn[arm]['method']` — that file never mentions `ensemble`. Config
-    access always names the parent (`cfg["ensemble"]["method"]` or via an `ensemble` alias)."""
+    """Files that read this config key. For a dotted key, BOTH the leaf AND its parent segment must
+    appear (quoted) in the same file: a generic leaf name such as `method`, `train` or `val` is
+    quoted in many files that never read the config key. Config access always names the parent
+    (`cfg["ensemble"]["method"]` or via an `ensemble` alias). A top-level key has no parent, so it
+    must be indexed on the config object itself (`cfg["seed_list"]`, `cfg.get("seed_list")`):
+    the bare word would also match `cfg["repetition"]["seed_list"]`."""
     segs = key.split(".")
     leaf = segs[-1]
     parent = segs[-2] if len(segs) >= 2 else None
     leaf_pat = re.compile(r'["\']' + re.escape(leaf) + r'["\']')
     files = [f for f, t in sources.items() if not f.endswith(skip) and leaf_pat.search(t)]
     if parent is None:
-        return files
+        top = re.compile(r'cfg\s*(?:\[\s*|\.get\(\s*)["\']' + re.escape(leaf) + r'["\']')
+        return [f for f in files if top.search(sources[f])]
     parent_pat = re.compile(r'["\']' + re.escape(parent) + r'["\']')
     return [f for f in files if parent_pat.search(sources[f])]
 
@@ -92,7 +89,7 @@ def main():
         status, _ = CONTRACT[k]
         if status != "consumed":
             continue
-        if not is_read(k.split(".")[-1], sources):
+        if not is_read_pathaware(k, sources):   # parent+leaf, as in step 3
             ghosts.append(k)
     if ghosts:
         problems.append(f"{len(ghosts)} key(s) declared 'consumed' that NO source reads: {ghosts}")
@@ -118,6 +115,10 @@ def main():
     print(f"[4/4] deferred (NOT implemented — never describe as done in the manuscript): "
           f"{len(deferred)}")
     for k in deferred:
+        print(f"        {k}  — {CONTRACT[k][1]}")
+    inert = sorted(k for k in keys if CONTRACT[k][0] == "inert")
+    print(f"      inert (not read, and not a description of the study): {len(inert)}")
+    for k in inert:
         print(f"        {k}  — {CONTRACT[k][1]}")
 
     if problems:

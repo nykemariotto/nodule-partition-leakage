@@ -1,9 +1,8 @@
 """
-PROJECT THE GAIN FROM STRATIFIED FOLDS — no GPU, no retraining (DECISIONS D27 / open item (a)).
+PROJECT THE GAIN FROM STRATIFIED FOLDS — no GPU, no retraining.
 
-Question: would StratifiedGroupKFold buy enough statistical power to justify re-running the 20
-canonical runs (Option A), or did plain grouping already produce folds good enough to keep them
-and simply delete the untrue `split.stratify_key` (Option B)?
+Question: would stratifying the folds by label (StratifiedGroupKFold) reduce the fold-to-fold
+variance of the metrics, compared with the grouped folds the experiment uses?
 
 METHOD. Predictions are held FIXED (the archived per-nodule / per-slice probabilities from the
 runs we already have) and only the PARTITION used to aggregate them is re-drawn, S times, under
@@ -11,13 +10,13 @@ two schemes on the identical patient pool:
     current      shuffled round-robin over patients  (exactly `src/splits.py::_fold_assign`)
     stratified   sklearn StratifiedGroupKFold(groups=patient_id, y=label)
 For each draw we recompute the per-fold patient-arm metric, the fold-to-fold SD, and the naive
-and Nadeau-Bengio (D6) interval half-widths.
+and Nadeau-Bengio interval half-widths.
 
 WHAT THIS ISOLATES, and what it does NOT. It measures the component of fold-to-fold variance
 caused by FOLD COMPOSITION - which is the only component stratification can remove. Under real
 stratified CV the models would also be retrained on different training sets, so the predictions
 themselves would change; that component is NOT captured here and could move the answer either
-way. This is therefore INDICATIVE, not a measurement of the post-A result. Labelled as such.
+way. This is therefore INDICATIVE, not a measurement of a retrained result. Labelled as such.
 
 The random arm is treated as a constant comparator: its fold-to-fold metric SD is ~0.006-0.007
 versus 0.023-0.052 in the patient arm, so essentially all of the gap's fold variance is the
@@ -40,7 +39,8 @@ from sklearn.metrics import roc_auc_score, log_loss, brier_score_loss
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from src.metadata import load_config
-from src.datasets import load_processed_index
+from src.artifacts import REPO, outputs_dir, read_split, check_aligned, resolve_archs, name_for
+from src.stats import rho_from_splits
 
 K = 5
 
@@ -55,9 +55,9 @@ def fold_assign_current(n, k, seed):
     return out
 
 
-def load_pooled(cfg, arch, arm, pidx, folds=range(K)):
+def load_pooled(cfg, arch, arm, folds=range(K)):
     """Every test row of `arm`, pooled across folds, with its archived probability."""
-    O = os.path.join(cfg["project"]["root"], cfg["paths"]["outputs"])
+    O = outputs_dir(cfg)
     parts = []
     for f in folds:
         tag = f"lidc_binary_slice_{arm}_rep0_fold{f}"
@@ -66,11 +66,8 @@ def load_pooled(cfg, arch, arm, pidx, folds=range(K)):
         if not (os.path.exists(npz) and os.path.exists(csv)):
             return None
         d = np.load(npz)
-        s = pd.read_csv(csv)
-        s["z_position"] = s["z_position"].round(2)
-        m = s.merge(pidx, on=["nodule_id", "z_position"], how="inner").reset_index(drop=True)
-        if len(m) != len(d["y_prob"]):
-            raise RuntimeError(f"alignment failed {arm} f{f} {arch}")
+        m = read_split(csv)
+        check_aligned(m, d["y_true"], d["y_prob"], f"{tag} {arch}")
         m["prob"] = d["y_prob"].astype(float)
         m["orig_fold"] = f
         parts.append(m)
@@ -108,7 +105,7 @@ def evaluate_partition(unit_df, fold_of_patient):
 
 
 def ci_halfwidths(vals, rho):
-    """naive t half-width and the Nadeau-Bengio corrected one (D6)."""
+    """naive t half-width and the Nadeau-Bengio corrected one."""
     s = vals.std(ddof=1)
     tc = float(tdist.ppf(0.975, K - 1))
     return tc * s / np.sqrt(K), tc * s * np.sqrt(1.0 / K + rho)
@@ -121,18 +118,22 @@ def main():
                     help="comma-separated. DEFAULT: every architecture with runs on disk. A "
                          "hardcoded pair silently froze this projection at two architectures.")
     ap.add_argument("--draws", type=int, default=400)
-    ap.add_argument("--rho", type=float, default=0.2839, help="n_test/n_train, measured (D6)")
+    ap.add_argument("--rho", type=float, default=None,
+                    help="n_test/n_train; default: measured on the repeat-0 patient-arm splits "
+                         "this projection re-partitions")
     ap.add_argument("--json", default="outputs/metrics/stratification_projection.json")
     args = ap.parse_args()
-    from src.artifacts import resolve_archs
-    import os as _os
-    _probs = _os.path.join(_os.path.dirname(_os.path.dirname(_os.path.abspath(__file__))),
-                           "outputs", "probs")
-    _ARCHS, _ = resolve_archs(_probs, "lidc_binary", args.archs,
-                              cells=(["slice"], ["patient", "random"], [0, 1, 2], [0, 1, 2, 3, 4]))
+    _probs = os.path.join(REPO, "outputs", "probs")
+    _ARCHS, _PRESENT = resolve_archs(_probs, "lidc_binary", args.archs,
+                                     cells=(["slice"], ["patient", "random"], [0, 1, 2], [0, 1, 2, 3, 4]))
     args.archs = ",".join(_ARCHS)
     cfg = load_config(args.config)
-    pidx = load_processed_index(cfg, "none")
+    if args.rho is None:
+        sp = os.path.join(outputs_dir(cfg), "splits")
+        def rows(f, part):
+            return len(pd.read_csv(os.path.join(sp, f"lidc_binary_slice_patient_rep0_fold{f}_{part}.csv"),
+                                   usecols=["nodule_id"]))
+        args.rho = rho_from_splits([rows(f, "test") for f in range(K)], [rows(f, "train") for f in range(K)])
 
     print(f"draws per scheme: {args.draws} · NB rho {args.rho:.4f}")
     print("predictions FIXED (archived); only the aggregation partition is re-drawn.")
@@ -140,8 +141,8 @@ def main():
 
     report = {}
     for arch in args.archs.split(","):
-        pat = load_pooled(cfg, arch, "patient", pidx)
-        rnd = load_pooled(cfg, arch, "random", pidx)
+        pat = load_pooled(cfg, arch, "patient")
+        rnd = load_pooled(cfg, arch, "random")
         if pat is None or rnd is None:
             print(f"{arch}: artifacts missing - skipped"); continue
 
@@ -199,8 +200,13 @@ def main():
             report[f"{arch}|{level}"] = res
 
     if args.json:
-        p = args.json if os.path.isabs(args.json) else os.path.join(cfg["project"]["root"], args.json)
+        d = os.path.dirname(args.json)
+        stem = os.path.basename(args.json)[:-5]
+        p = os.path.join(d, name_for(stem.split("__")[0], "lidc_binary", _ARCHS, _PRESENT) + ".json")
+        p = p if os.path.isabs(p) else os.path.join(REPO, p)
         os.makedirs(os.path.dirname(p), exist_ok=True)
+        report["_about"] = {"draws_per_scheme": args.draws, "rho": args.rho,
+                            "rho_source": "mean n_test/n_train over the repeat-0 patient-arm folds"}
         json.dump(report, open(p, "w"), indent=1)
         print(f"wrote {p}")
 

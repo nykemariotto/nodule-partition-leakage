@@ -1,5 +1,5 @@
 {
- "_note": "D53 normalisation, slice level. z = mean_gap / SD of the patient-arm value across folds. r is the SECONDARY relative gap, reported but not the basis of any claim.",
+ "_note": "Normalisation, slice level. z = mean_gap / SD of the patient-arm value across folds. r is the SECONDARY relative gap, reported but not the basis of any claim.",
  "reps": [
   0,
   1,

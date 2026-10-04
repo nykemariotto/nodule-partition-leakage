@@ -1,7 +1,7 @@
 {
   "generated_utc": "2026-07-17T16:40:21Z",
   "principal_min_annotators": 1,
-  "note": "D16 reversal: principal = min_annotators>=1 (literature-comparable + viable); >=3 = sensitivity",
+  "note": "principal = min_annotators>=1 (literature-comparable + viable); >=3 = sensitivity",
   "funnel": {
     "scans": 1018,
     "patients": 1010,

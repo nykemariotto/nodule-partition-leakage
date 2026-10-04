@@ -1,12 +1,13 @@
 """
-STAGE 4 — train ONE (dataset, arch, arm, seed) run (SPEC §6.4).
+Train ONE (dataset, arch, arm, seed) run.
 
     python -m src.train --dataset lidc_binary --arch efficientnet_b0 --arm patient \
         --sample-unit slice --rep 0 --fold 0 --seed 42 --max-epochs 8
 
-Saves (SPEC §0): y_true + y_prob (outputs/probs/*.npz), train/val history (outputs/history/*.json),
+Saves: y_true + y_prob (outputs/probs/*.npz), train/val history (outputs/history/*.json),
 best weights (outputs/models/*.pt). Logs peak VRAM. 8 GB kit: AMP + grad-accum (effective 32) +
-channels_last. Losing probabilities is what sank the previous submission.
+channels_last. The probabilities are saved for every run so that every metric can be recomputed
+without retraining.
 """
 from __future__ import annotations
 
@@ -78,7 +79,7 @@ def evaluate(model, loader, device, criterion, mem_fmt=torch.contiguous_format):
 
 
 def main():
-    ap = argparse.ArgumentParser(description="STAGE 4 — one training run.")
+    ap = argparse.ArgumentParser(description="One training run.")
     ap.add_argument("--config", default="config.yaml")
     ap.add_argument("--dataset", default="lidc_binary")
     ap.add_argument("--arch", default="efficientnet_b0")
@@ -95,10 +96,10 @@ def main():
     args = ap.parse_args()
 
     cfg = load_config(args.config)
-    # A config key no code reads is a false claim (D27). Block before touching the GPU: at grid
+    # A config key no code reads is a false claim. Block before touching the GPU: at grid
     # scale an undeclared key would otherwise be inherited silently by hundreds of runs.
     contract = assert_contract(cfg)
-    cfg_hash = config_hash(cfg)                 # D25: stamp into every artifact for grid consistency
+    cfg_hash = config_hash(cfg)                 # stamped into every artifact for grid consistency
     print(f"[train] config-code contract OK: {contract} · config_sha256 {cfg_hash[:12]}")
     seed_everything(args.seed)
     device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -132,10 +133,10 @@ def main():
     scaler = GradScaler()
     accum = tr_cfg["grad_accum_steps"]
     max_epochs = args.max_epochs or tr_cfg["max_epochs"]
-    # TRAINING budget guard. Defaults to the full budget (no truncation) because the `final`
-    # memorisation probe (D22 ii) requires every run to reach max_epochs; truncating would leave
-    # some runs without a probe and make the mechanism analysis asymmetric. The pre-registered
-    # config.train.early_stopping_patience governs SELECTION (sel_patience below), not truncation.
+    # TRAINING budget guard. Defaults to the full budget (no truncation) so that the final-epoch
+    # checkpoint exists for every run (it is kept, and never used for a reported number). The
+    # prespecified config.train.early_stopping_patience governs SELECTION (sel_patience below),
+    # not truncation.
     patience = args.patience or max_epochs
 
     def snapshot():
@@ -143,12 +144,11 @@ def main():
 
     history = []
     best_val, best_loss_state, bad = float("inf"), None, 0
-    # CANONICAL SELECTION WINDOW (D46/D47). The pre-registered protocol is
+    # CANONICAL SELECTION WINDOW. The prespecified protocol is
     # config.train.early_stopping_patience (=10). The canonical checkpoint is the one THAT protocol
     # would select: argmin(val_loss) among epochs up to the point where patience-10 would have
-    # stopped training. Training itself is NOT truncated -- it runs the full budget so the `final`
-    # memorisation probe (D22 ii) exists for EVERY run and the mechanism analysis stays symmetric.
-    # Selection is restricted; training is not.
+    # stopped training. Training itself is NOT truncated -- it runs the full budget so the
+    # final-epoch checkpoint exists for EVERY run. Selection is restricted; training is not.
     sel_patience = int(tr_cfg["early_stopping_patience"])
     sel_val, canon_state, canon_epoch, sel_bad, sel_frozen = float("inf"), None, None, 0, False
     for ep in range(1, max_epochs + 1):
@@ -189,14 +189,14 @@ def main():
     if canon_state is None:                      # degenerate: val never improved inside the window
         canon_state, canon_epoch = best_loss_state, int(np.argmin([h["val_loss"] for h in history]) + 1)
 
-    # --- DUAL CHECKPOINT (SPEC/DECISIONS): one training pass, two readings ---
-    #   canonical = best val_loss WITHIN the patience-`selection_patience` window (D47) — what the
-    #               pre-registered protocol would select; THE paper number. NOTE: this is not the
+    # --- DUAL CHECKPOINT: one training pass, two readings ---
+    #   canonical = best val_loss WITHIN the patience-`selection_patience` window — what the
+    #               prespecified protocol would select; THE reported number. NOTE: this is not the
     #               unrestricted argmin; `unrestricted_best_epoch` is stamped alongside for audit.
-    #   probe     = final          (max memorization; mechanistic only, never the headline)
+    #   final     = the last epoch (kept for every run, never used for a reported number)
     vls = [h["val_loss"] for h in history]
     unrestricted_best_epoch = int(np.argmin(vls) + 1)
-    best_epoch = int(canon_epoch)     # the SELECTED canonical checkpoint (patience-window, D47)
+    best_epoch = int(canon_epoch)     # the SELECTED canonical checkpoint (patience window)
     es_epoch, bv, bad_run = None, float("inf"), 0          # when patience WOULD have fired
     for h in history:
         if h["val_loss"] < bv - 1e-4:

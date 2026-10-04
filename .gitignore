@@ -1,21 +1,23 @@
-﻿# =====================================================================
-# .gitignore â€” versions CODE + partition indices (B7) + cohort tables + docs.
-# Excludes raw data, large regenerable arrays, model weights, and mid-grid
-# volatile outputs. See data/README.md to obtain the raw datasets.
+# =====================================================================
+# .gitignore -- the repository versions the code, the partition indices, the per-sample
+# predictions and per-run histories, the cohort tables and the derived results. It excludes the
+# raw images, the large regenerable arrays and the model weights. See data/README.md to obtain
+# the raw data.
 # =====================================================================
 
-# --- raw data (never committed; huge, external) ---
+# --- raw data (never committed; large and distributed by TCIA under its own terms) ---
 LIDC-IDRI/
 LNDb/
 LNDB/
-data/
+data/*
+!data/README.md
 *.rar
 *.mhd
 *.raw
 *.dcm
 
-# --- large / regenerable arrays and weights (CRITICAL: exclude the .npy tree,
-#     ~5.7 GB, and all model checkpoints) ---
+# --- large, regenerable arrays and weights: the preprocessed .npy tree (~8 GB) and every model
+#     checkpoint (~6 GB), both regenerable from the committed code and indices ---
 outputs/processed/
 *.npy
 outputs/models/
@@ -24,37 +26,21 @@ outputs/**/*.pth
 outputs/metadata/*.pkl
 outputs/metadata/processed_index_*.csv
 
-# --- backups / archives / logs (not part of the released repo) ---
-outputs/_archive_250/
-outputs/_pre_remediation/
+# --- logs ---
 outputs/logs/
+*.log
+*.err
 
-# --- POST-GRID (2026-07-27): the 740-patient grid is COMPLETE (150 runs, consistency gate exit 0),
-#     so the artifacts below are no longer volatile and ARE committed, as planned. They are what
-#     makes the verifiability claim real: every reported number is regenerated from
-#     these by the released code, with no GPU. Total ~11 MB.
-#   outputs/probs/     per-sample y_true + y_prob, one .npz per run
-#   outputs/history/   per-epoch train/val trajectory + the config stamp, one .json per run
-#   outputs/metrics/   analysis outputs
-#   outputs/results/   per-model tables, confusion matrices
-#   outputs/figures/   generated figures
-#
-# Model WEIGHTS stay out (outputs/models/, 6.3 GB) and so do the preprocessed arrays
-# (outputs/processed/, 8.2 GB): both are regenerable from the committed code + indices.
+# Committed on purpose (not ignored): outputs/splits/ (the partition indices), outputs/probs/
+# (per-sample y_true and y_prob for every run), outputs/history/ (per-epoch trajectories with the
+# configuration hash), outputs/metadata/ (cohort and accounting tables), and the derived results
+# in outputs/results/, outputs/metrics/, outputs/_analysis/ and outputs/figures/.
 
-# --- committed ON PURPOSE (do NOT ignore): the executable partition indices
-#     R3 asked for (B7), the cohort/accounting tables, code, config, docs ---
-#   outputs/splits/            (partition indices â€” B7)
-#   outputs/metadata/lidc_master.csv, lidc_nodules.csv, dataset_accounting.*
-
-# --- generated report artifacts (regenerable from source) ---
+# --- generated documents: ignored, except the figures the article embeds ---
 *.pdf
-Relatorio_*.html
-# EXCEPTION: the design schematic and its generator. Fig. 1 is a deterministic rendering of the
-# committed partition indices, and the article states that every figure is produced by a released
-# plotting script, so the script and its output are published.
 !figures/*.pdf
 !figures/*.png
+!outputs/figures/*.pdf
 
 # --- python / os / editors ---
 __pycache__/
@@ -67,51 +53,15 @@ Thumbs.db
 .vscode/
 .idea/
 
-# --- stray scratch logs ---
-*.log
-# build output: the bibliography is inlined in the .tex, so a tracked .bbl would be a second
-# copy of it, free to drift.
+# --- build output and working copies ---
 *.bbl
-*.err
-
-# The manuscript package. It stays on disk and is not published: this repository accompanies the
-# study with its code, partition indices and per-sample predictions, and a manuscript build tree is
-# none of those. It also holds material that must not be redistributed -- the peer-review
-# correspondence, and the IEEE template scaffolding, whose class files and the commercial Formata
-# typeface are licensed to IEEE. The two things the article points at by name sit outside it:
-# partition_unit_survey.md at the repository root, and figures/ for the design schematic.
-paper/
-
-# Submission machinery. These drive the correspondence and the hand-off, not the study: they build
-# the annotated PDF and the response document, and copy the deliverables to the coauthors
-# shared folder. They also carry absolute local paths and the text of the cover letter.
-scripts/build_highlighted.py
-scripts/build_response_docx.py
-scripts/sync_shared.ps1
-
-# Project-management ledger, not a study artifact: 131 open work items and 96 blocking relations,
-# tracking what each component owed and to which review item. It records our progress, not the
-# experiment.
-outputs/metrics/inventory_components.json
-
-# LNDb licence text, kept while that dataset was still in scope. The study is confined to LIDC-IDRI,
-# and the LNDb licence forbids redistributing its material outside the registered team.
-outputs/metrics/lndb_readme.txt
-
-# Superseded audit artifacts, which also recorded the author's user directory.
-outputs/metrics/audit_raw.json
-outputs/metrics/audit_findings.json
-
-# --- INTERNAL WORKING MATERIAL, NOT PUBLISHED (researcher's instruction, 2026-07-28) ---
-# docs/ is our workspace, not documentation: the decision log, the session journal, the running
-# status, the methodology contract, run plans, and a draft letter to another dataset's authors. It is
-# our context and history, and it stays local. Public documentation is README.md plus the README in
-# outputs/splits/.
-docs/
-# Working backups and pre-strip copies. manuscript.tex.commented and references.bib.commented
-# hold the 454 internal comments removed on 2026-08-09; committing them would republish exactly
-# what the strip removed, the pending-CRediT block among it.
 *.bak
 *.bak_*
-*.commented
-*.generated_from_md.bak
+
+# --- local working material, not part of the release: the manuscript build tree and notes ---
+paper/
+docs/
+
+# Literature search: abstracts and raw API responses stay local. Abstracts belong to their
+# publishers; the published tables keep identifiers, titles and the decisions taken on each record.
+outputs/literature/*/local/

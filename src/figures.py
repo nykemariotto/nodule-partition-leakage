@@ -1,14 +1,14 @@
 """
-STAGE 8 — figures from saved artifacts (SPEC; learning curves and confusion matrices).
+Figures from saved artifacts: learning curves and confusion matrices.
 
 Reads ONLY what is already on disk — `outputs/probs/*.npz` (y_true, y_prob) and
 `outputs/history/*.json` (per-epoch train/val). No GPU, no re-inference. Every number traces to a
 saved file, so the figures are reproducible from the released artifacts (the whole point).
 
-Produces TWO figures, each covering every architecture DISCOVERED ON DISK (not one file per
-architecture -- only one architecture's curves reached the submitted manuscript, and that is
-easy to repeat). Restricting to a subset with --archs is allowed but renames the output, so a
-partial figure can never occupy the filename the manuscript embeds:
+Produces TWO figures, each covering every architecture of the reported experiment in one file
+rather than one file per architecture, so no architecture can be left out of the article unnoticed.
+Restricting to a subset with --archs, or running fewer repeats, is allowed but renames the output,
+so a partial figure can never occupy the filename the manuscript embeds:
   * confusion_matrices.png  — grid of nodule-level confusion matrices, architectures as rows and
                               partition conditions as columns, lettered panels. The visual of the
                               leakage: the random (leaky) condition looks cleaner than the honest
@@ -21,25 +21,24 @@ partial figure can never occupy the filename the manuscript embeds:
 Neither figure carries a figure-level title: the IEEE Access template asks that captions not be part
 of the figure. Everything descriptive lives in the LaTeX caption.
 And a machine-readable `outputs/results/confusion_matrices.json` with per-arm counts + derived
-precision/recall/F1/accuracy, INCLUDING an internal check that F1 == 2PR/(P+R) (B9: a published F1
-that violates this identity is how the check earned its place).
+precision/recall/F1/accuracy, INCLUDING an internal check, within each repeat, that
+F1 == 2PR/(P+R) (a published F1 that violates this identity is how the check earned its place).
 
-Confusion-matrix aggregation note (honest): counts are SUMMED over the 5 fold test sets. For the
-patient- and nodule-grouped conditions the folds partition their grouping unit, so those are clean
-cross-validated CMs (each nodule scored once). For the random condition the test folds OVERLAP by
-construction (measured 78-82% patient reuse per fold), so its summed CM re-scores some nodules
-across folds; it is a faithful picture of what the leaky protocol produced, not a disjoint
-partition. Stated in the caption and the JSON.
+Confusion-matrix aggregation: one prediction per nodule per repeat. Each repeat's five test folds
+are pooled before a nodule's slice probabilities are averaged, so every nodule is scored exactly
+once per repeat in every condition, including the random one, whose slice-level folds spread a
+nodule over several test folds (the estimator of scripts/nodule_oof.py). Counts are summed over
+the repeats; the accuracy and F1 printed on each panel are the means of the per-repeat values, and
+the JSON also keeps the values recomputed from the summed counts.
 
-    python -m src.figures                 # every architecture found on disk
-    python -m src.figures --archs densenet121    # -> a SUFFIXED filename, not the canonical one
+    python -m src.figures --sample-units slice,nodule    # the two figures the article embeds
+    python -m src.figures --archs densenet121            # -> a SUFFIXED filename, not the canonical one
 """
 from __future__ import annotations
 
 import argparse
 import json
 import os
-import re
 import string
 
 import numpy as np
@@ -56,28 +55,42 @@ import matplotlib.pyplot as plt
 from matplotlib.lines import Line2D          # proxy handles for the shared figure-level legend
 from matplotlib.patches import Rectangle   # confusion cells, drawn instead of rasterised
 
+from src.artifacts import outputs_dir, read_split, check_aligned, arms_on_disk
+
 # Split-file prefix, set from --dataset. "lidc_binary" = principal cohort; "lidc_binary_ge3" = the
-# >=3-annotator sensitivity cohort (D37), which carries a distinct prefix so its runs can never be
-# pooled with the principal ones. Was hardcoded until 2026-07-26.
+# >=3-annotator sensitivity cohort, which carries a distinct prefix so its runs can never be
+# pooled with the principal ones.
 DATASET = "lidc_binary"
 
 
-def _load(cfg, arch, arm, fold, pidx, suffix="", rep=0):
-    """Archived probs joined to their split rows, at nodule level (mean of slice probs)."""
-    O = os.path.join(cfg["project"]["root"], cfg["paths"]["outputs"])
+def _load_slices(cfg, arch, arm, fold, suffix="", rep=0):
+    """Archived probs joined to their split rows, one row per test slice."""
+    O = outputs_dir(cfg)
     tag = f"{DATASET}_slice_{arm}_rep{rep}_fold{fold}"
     npz = os.path.join(O, "probs", f"{tag}_{arch}_none_seed42{suffix}.npz")
     csv = os.path.join(O, "splits", f"{tag}_test.csv")
     if not (os.path.exists(npz) and os.path.exists(csv)):
         return None
     d = np.load(npz)
-    s = pd.read_csv(csv); s["z_position"] = s["z_position"].round(2)
-    m = s.merge(pidx, on=["nodule_id", "z_position"], how="inner").reset_index(drop=True)
-    if len(m) != len(d["y_prob"]):
-        raise RuntimeError(f"alignment {arm} f{fold} {arch}: {len(m)} vs {len(d['y_prob'])}")
+    m = read_split(csv)
+    check_aligned(m, d["y_true"], d["y_prob"], f"{tag} {arch}{suffix}")
     m["prob"] = d["y_prob"].astype(float)
-    g = m.groupby("nodule_id").agg(label=("label", "first"), prob=("prob", "mean")).reset_index()
-    return g
+    return m
+
+
+def _repeat_by_nodule(cfg, arch, arm, suffix="", rep=0, fold_range=range(5)):
+    """One prediction per nodule for one repeat: the repeat's test folds together, then the mean
+    of each nodule's slice probabilities. In the random arm a nodule's slices sit in several test
+    folds; scoring fold by fold would count that nodule several times, on part of its slices each
+    time. Pooled first, every nodule is counted once per repeat in every arm (same estimator as
+    scripts/nodule_oof.py)."""
+    parts = [_load_slices(cfg, arch, arm, k, suffix, rep) for k in fold_range]
+    if any(p is None for p in parts):
+        return None
+    s = pd.concat(parts, ignore_index=True)
+    if s.duplicated(["nodule_id", "z_position"]).any():
+        raise RuntimeError(f"{arch} {arm} rep{rep}: a slice in two test folds")
+    return s.groupby("nodule_id").agg(label=("label", "first"), prob=("prob", "mean")).reset_index()
 
 
 def _cm_counts(y, p, thr=0.5):
@@ -93,23 +106,33 @@ def _derived(tp, tn, fp, fn):
     acc = (tp + tn) / (tp + tn + fp + fn) if (tp + tn + fp + fn) else float("nan")
     f1 = (2 * prec * rec / (prec + rec)
           if (prec + rec) and not (np.isnan(prec) or np.isnan(rec)) else float("nan"))
-    if not np.isnan(f1):                       # B9: F1 must equal 2PR/(P+R)
+    if not np.isnan(f1):                       # F1 must equal 2PR/(P+R)
         assert abs(f1 - 2 * prec * rec / (prec + rec)) < 1e-9
     return dict(precision=prec, recall=rec, f1=f1, accuracy=acc)
 
 
-def arm_cm(cfg, arch, arm, pidx, suffix="", reps=(0,), fold_range=range(5)):
-    tp = tn = fp = fn = folds = 0
+def arm_cm(cfg, arch, arm, suffix="", reps=(0,), fold_range=range(5)):
+    """Counts summed over the repeats, one prediction per nodule per repeat, so every panel counts
+    each nodule exactly once per repeat. The accuracy and F1 printed on a panel are the MEANS of
+    the per-repeat values -- the figures the text quotes -- not values recomputed from the summed
+    counts, which differ in the fourth decimal for F1."""
+    tp = tn = fp = fn = 0
+    per_rep = []
     for rep in reps:
-        for k in fold_range:
-            g = _load(cfg, arch, arm, k, pidx, suffix, rep)
-            if g is None:
-                continue
-            a, b, c, d = _cm_counts(g["label"], g["prob"])
-            tp += a; tn += b; fp += c; fn += d; folds += 1
-    if folds == 0:
+        g = _repeat_by_nodule(cfg, arch, arm, suffix, rep, fold_range)
+        if g is None:
+            raise SystemExit(f"{arch} {arm} rep{rep}: a run or split file is missing -- refusing to "
+                             f"draw a panel from fewer repeats than requested")
+        p = np.clip(g["prob"].to_numpy(float), 1e-6, 1 - 1e-6)
+        a, b, c, d = _cm_counts(g["label"], p)
+        tp += a; tn += b; fp += c; fn += d
+        per_rep.append(_derived(a, b, c, d))
+    if not per_rep:
         return None
-    return dict(tp=tp, tn=tn, fp=fp, fn=fn, folds=folds, **_derived(tp, tn, fp, fn))
+    mean = {m: float(np.mean([r[m] for r in per_rep])) for m in ("accuracy", "f1", "precision", "recall")}
+    return dict(tp=tp, tn=tn, fp=fp, fn=fn, repeats=len(per_rep),
+                accuracy=mean["accuracy"], f1=mean["f1"], precision=mean["precision"],
+                recall=mean["recall"], from_summed_counts=_derived(tp, tn, fp, fn))
 
 
 ARM_LABEL = {"patient": "patient-grouped", "random": "random", "nodule": "nodule-grouped"}
@@ -145,8 +168,8 @@ def display(arch: str) -> str:
 # IEEE requires >300 dpi for colour/grayscale and >600 dpi for line art
 # (journals.ieeeauthorcenter.ieee.org, "Resolution and Size"). These figures ARE line art, and at
 # dpi=200 they printed at ~275 effective dpi across the two-column width -- under both thresholds.
-# So the submission copy is VECTOR pdf, which has no resolution to be under; the png is kept for
-# quick viewing and is now well above 300 dpi at print size.
+# So the copy the article embeds is VECTOR pdf, which has no resolution to be under; the png is
+# kept for quick viewing and is well above 300 dpi at print size.
 FIG_DPI = 600
 
 # IEEE Access two-column text width, inches. NOT 7.16 -- that is IEEEtran's. ieeeaccess.cls:263 sets
@@ -173,7 +196,7 @@ ROW_H = 1.48
 # expected-cell count drifted here and nowhere else, and the drift was invisible.
 
 
-def plot_confusion(cfg, archs, pidx, outdir, reps=(0,), fold_range=range(5),
+def plot_confusion(cfg, archs, outdir, reps=(0,), fold_range=range(5),
                    arms=("patient", "nodule", "random"), stem="confusion_matrices"):
     """One figure: a grid of 2x2 confusion matrices, architectures as rows, conditions as columns.
 
@@ -191,7 +214,7 @@ def plot_confusion(cfg, archs, pidx, outdir, reps=(0,), fold_range=range(5),
     grid = {}
     for a in archs:
         for arm in arms:
-            grid[(a, arm)] = arm_cm(cfg, a, arm, pidx, reps=reps, fold_range=fold_range)
+            grid[(a, arm)] = arm_cm(cfg, a, arm, reps=reps, fold_range=fold_range)
     if all(v is None for v in grid.values()):
         return None
 
@@ -296,7 +319,7 @@ def plot_curves(cfg, archs, outdir, reps=(0,), fold_range=range(5), sample_units
     memorisation signature that appeared in one backbone and not the others would be a property of
     that backbone. Showing all three is the replication.
 
-    With both sample units this figure IS the mechanism, visually (D41): at SLICE level the random
+    With both sample units this figure shows the mechanism, visually: at SLICE level the random
     arm's validation loss keeps falling with training loss (the leaked val split is memorised
     alongside it) while the patient arm's diverges upward -- the honest generalisation gap. At
     NODULE level, where within-nodule slice redundancy is eliminated by construction, that asymmetry
@@ -305,7 +328,7 @@ def plot_curves(cfg, archs, outdir, reps=(0,), fold_range=range(5), sample_units
 
     NO figure-level title (IEEE Access: "Please do not include captions as part of the figures").
     """
-    O = os.path.join(cfg["project"]["root"], cfg["paths"]["outputs"])
+    O = outputs_dir(cfg)
     archs, sus = list(archs), list(sample_units)
     # Chosen so the two arms survive a MONOCHROME print. The previous pair, #1b7837 and #c51b7d,
     # converts to grey 84.8 and 89.0 -- 4.2 levels out of 255 -- and the arm is carried by hue
@@ -414,14 +437,15 @@ def main():
                          "two-architecture figure once a third existed -- and the freshness gate "
                          "printed exactly that command as its remediation, so following the gate's "
                          "own instruction made it go green over a figure missing an architecture.")
-    ap.add_argument("--reps", default="0", help="comma-separated rep indices; grid S2 = 0,1,2")
+    ap.add_argument("--reps", default="0,1,2",
+                    help="comma-separated rep indices; fewer than all three suffixes the outputs")
     ap.add_argument("--sample-units", default="slice",
                     help="comma-separated: slice,nodule. Passing both puts one ROW per unit in the "
                          "curves figure — the visual side-by-side of the memorisation asymmetry "
                          "(present at slice level, absent at nodule level).")
     ap.add_argument("--dataset", default="lidc_binary",
                     help="split-file prefix: lidc_binary (principal) or lidc_binary_ge3 "
-                         "(>=3-annotator sensitivity cohort, D37 -- never pooled)")
+                         "(>=3-annotator sensitivity cohort -- never pooled)")
     ap.add_argument("--arms", default="patient,nodule,random",
                     help="confusion-matrix columns, in display order (A, C, B)")
     args = ap.parse_args()
@@ -429,11 +453,9 @@ def main():
     DATASET = args.dataset
 
     from src.metadata import load_config
-    from src.datasets import load_processed_index
     cfg = load_config(args.config)
-    pidx = load_processed_index(cfg, "none")
     reps = [int(x) for x in args.reps.split(",")]
-    outdir = os.path.join(cfg["project"]["root"], cfg["paths"]["outputs"], "figures")
+    outdir = os.path.join(outputs_dir(cfg), "figures")
     os.makedirs(outdir, exist_ok=True)
 
     arms = tuple(a.strip() for a in args.arms.split(",") if a.strip())
@@ -450,14 +472,17 @@ def main():
     # finished architecture read as 75 of 90, no architecture was ever "complete", and the probe
     # filter that depends on completeness never engaged. A one-run probe was drawn as a full row.
     from src.artifacts import resolve_archs, name_for as _name_for
-    probs_dir = os.path.join(cfg["project"]["root"], cfg["paths"]["outputs"], "probs")
+    probs_dir = os.path.join(outputs_dir(cfg), "probs")
     archs, present = resolve_archs(probs_dir, DATASET, args.archs,
                                    log=lambda m: print(m.replace("[artifacts]", "[figures]")),
                                    cells=(sus, arms, reps, folds))
 
-    cm_stem = _name_for("confusion_matrices", DATASET, archs, present)
-    cv_stem = _name_for(f"curves_{'-'.join(sus)}", DATASET, archs, present)
-    cm = plot_confusion(cfg, archs, pidx, outdir, reps=reps, arms=arms, stem=cm_stem)
+    all_arms = arms_on_disk(probs_dir, DATASET, "slice")
+    cm_stem = _name_for("confusion_matrices", DATASET, archs, present, reps=reps, folds=folds,
+                        arms=arms, all_arms=all_arms)
+    cv_stem = _name_for(f"curves_{'-'.join(sus)}", DATASET, archs, present, reps=reps, folds=folds,
+                        arms=arms, all_arms=all_arms)
+    cm = plot_confusion(cfg, archs, outdir, reps=reps, arms=arms, stem=cm_stem)
     cp = plot_curves(cfg, archs, outdir, reps=reps, sample_units=sus, stem=cv_stem)
     print(f"curves: {cp}")
 
@@ -470,7 +495,8 @@ def main():
             if not cells:
                 continue
             summary[arch] = {arm: {k: c[k] for k in
-                                   ("tp", "tn", "fp", "fn", "precision", "recall", "f1", "accuracy")}
+                                   ("tp", "tn", "fp", "fn", "precision", "recall", "f1", "accuracy",
+                                    "repeats", "from_summed_counts")}
                              for arm, c in cells.items()}
             print(f"  {arch}")
             for arm, c in cells.items():
@@ -478,16 +504,17 @@ def main():
                       f"prec {c['precision']:.4f}  rec {c['recall']:.4f}  "
                       f"(TN{c['tn']} FP{c['fp']} FN{c['fn']} TP{c['tp']})")
 
-    R = os.path.join(cfg["project"]["root"], cfg["paths"]["outputs"], "results")
+    R = os.path.join(outputs_dir(cfg), "results")
     os.makedirs(R, exist_ok=True)
-    meta = {"_note": "CM counts summed over ALL test folds of each condition -- 3 repeats x 5 folds. "
-                     "Within ONE repeat the patient- and nodule-grouped folds partition their "
-                     "grouping unit, so each nodule is scored once per repeat and THREE times in "
-                     "these totals; the earlier wording said 'scored once', which is true per repeat "
-                     "and wrong for the numbers reported here. The random condition's test folds "
-                     "OVERLAP by construction (leaky protocol), so a nodule falls in ~3.2 of the 5 "
-                     "folds and its totals are correspondingly larger. F1 == 2PR/(P+R) asserted "
-                     "(B9). threshold 0.5, nodule level.",
+    meta = {"_note": "Nodule level, threshold 0.5, one prediction per nodule per repeat: each "
+                     "repeat's five test folds are pooled before a nodule's slice probabilities "
+                     "are averaged, so every nodule is scored once per repeat in EVERY condition, "
+                     "including the random one, whose slice-level folds spread a nodule over "
+                     "several test folds. Counts are summed over the repeats ('repeats' says how "
+                     "many); accuracy, F1, precision and recall are the means of the per-repeat "
+                     "values, and 'from_summed_counts' holds them recomputed from the summed "
+                     "counts. Same estimator as scripts/nodule_oof.py. F1 == 2PR/(P+R) asserted "
+                     "within each repeat.",
             "arms": list(arms), "reps": reps, "dataset": DATASET,
             "archs": list(archs), "archs_present_on_disk": list(present),
             "arch": summary}

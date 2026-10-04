@@ -1,5 +1,5 @@
 """
-STAGE 4 — architecture factory (SPEC §2.4). ImageNet-initialised via timm, uniform API.
+Architecture factory. ImageNet-initialised via timm, uniform API.
 
 Config names map to timm model ids. Head is set to num_classes (2 for S2 binary).
 All fit RTX 4060 Ti 8 GB at 256² with AMP + gradient accumulation.

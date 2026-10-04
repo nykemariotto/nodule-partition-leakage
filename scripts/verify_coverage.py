@@ -29,7 +29,7 @@ def main():
     ap.add_argument("--config", default="config.yaml")
     ap.add_argument("--enhancement", default=None)
     ap.add_argument("--phase", choices=["subset", "grid"], default="subset",
-                    help="subset = pre-registered 250-patient experiment (asserts splits + in-use "
+                    help="subset = the 250-patient pilot (asserts splits + in-use "
                          "cohort); grid = FULL 740-patient cohort MUST be 100%% covered. Using "
                          "'subset' at grid stage would make this gate a false green.")
     ap.add_argument("--require-full-cohort", action="store_true",

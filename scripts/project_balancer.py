@@ -1,15 +1,11 @@
 """
-PROJECT THE GAIN FROM A NEAR-PERFECT FOLD BALANCER — no GPU, no retraining (D28(iii), rerun on 740).
+PROJECT THE GAIN FROM A NEAR-PERFECT FOLD BALANCER — no GPU, no retraining (740-patient cohort).
 
-Question: stratification is inert here (D28(ii)) — but that used sklearn's off-the-shelf splitter.
-Would a balancer that ACTUALLY achieves near-perfect fold prevalence buy anything? If even a
-15x improvement in the quantity stratification optimises leaves the fold-to-fold METRIC variance
-essentially unchanged, then fold prevalence is not what drives the variance, and only n can tighten
-the interval (D28(iv)).
-
-WHY THIS EXISTS: the D28(iii) measurement was made on the 250-patient SANITY pool. D35 bars
-250-stage numbers from the manuscript, and D54 makes cohort provenance a hard filter, so the claim
-had to be recomputed on the 740 cohort or dropped. This script recomputes it.
+Question: off-the-shelf stratification does not reduce fold-prevalence spread here
+(project_stratification.py) — but that used sklearn's splitter. Would a balancer that ACTUALLY
+achieves near-perfect fold prevalence buy anything? If even a large improvement in the quantity
+stratification optimises leaves the fold-to-fold METRIC variance essentially unchanged, then fold
+prevalence is not what drives the variance, and only n can tighten the interval.
 
 METHOD (identical in spirit to project_stratification.py). Predictions are held FIXED — the archived
 per-slice probabilities of the PATIENT arm, aggregated to one vote per nodule — and only the
@@ -39,7 +35,7 @@ import numpy as np
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from src.metadata import load_config
-from src.datasets import load_processed_index
+from src.artifacts import REPO, resolve_archs, name_for
 from project_stratification import (K, fold_assign_current, load_pooled, to_nodule,
                                     evaluate_partition)
 
@@ -101,20 +97,16 @@ def main():
     # as decompose_routes.py had. An analysis that leaves no artifact cannot be freshness-checked.
     ap.add_argument("--json", default="outputs/metrics/balancer_projection_740.json")
     args = ap.parse_args()
-    from src.artifacts import resolve_archs
-    import os as _os
-    _probs = _os.path.join(_os.path.dirname(_os.path.dirname(_os.path.abspath(__file__))),
-                           "outputs", "probs")
-    _ARCHS, _ = resolve_archs(_probs, "lidc_binary", args.archs,
-                              cells=(["slice"], ["patient", "random"], [0, 1, 2], [0, 1, 2, 3, 4]))
+    _probs = os.path.join(REPO, "outputs", "probs")
+    _ARCHS, _PRESENT = resolve_archs(_probs, "lidc_binary", args.archs,
+                                     cells=(["slice"], ["patient", "random"], [0, 1, 2], [0, 1, 2, 3, 4]))
     args.archs = ",".join(_ARCHS)
 
     cfg = load_config(args.config)
-    pidx = load_processed_index(cfg, "none")
     out = {}
 
     for arch in args.archs.split(","):
-        pooled = load_pooled(cfg, arch, "patient", pidx)
+        pooled = load_pooled(cfg, arch, "patient")
         if pooled is None:
             print(f"{arch}: patient-arm probs incomplete — skipped")
             continue
@@ -169,6 +161,10 @@ def main():
         out[arch] = res
 
     if args.json and out:
+        d = os.path.dirname(args.json)
+        stem = os.path.basename(args.json)[:-5]
+        args.json = os.path.join(d, name_for(stem.split("__")[0], "lidc_binary", _ARCHS, _PRESENT) + ".json")
+        args.json = args.json if os.path.isabs(args.json) else os.path.join(REPO, args.json)
         os.makedirs(os.path.dirname(args.json), exist_ok=True)
         with open(args.json, "w") as f:
             json.dump(out, f, indent=2)

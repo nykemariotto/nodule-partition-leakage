@@ -1,5 +1,5 @@
-# LIDC-IDRI dataset accounting (STAGE 1, v2)
-_Generated 2026-07-17T16:40:21Z · PRINCIPAL cohort = min_annotators >= 1 (D16 reversal)_
+# LIDC-IDRI dataset accounting
+_Generated 2026-07-17T16:40:21Z · PRINCIPAL cohort = min_annotators >= 1_
 
 ## Unit of analysis: annotation vs nodule — both reported
 - Annotation = one radiologist's >=3 mm reading; Nodule = pylidc cluster. Labelling unit = nodule.
@@ -13,7 +13,7 @@ _Generated 2026-07-17T16:40:21Z · PRINCIPAL cohort = min_annotators >= 1 (D16 r
 
 ## PRINCIPAL cohort (min_annotators >= 1) — literature-comparable + statistically viable
 - **slice-level (PRIMARY power experiment)**: 11026 slices (malignant 5504, benign 5522) · 740 patients
-- **nodule-level (CONFIRMATORY, wider CI — D17)**: 1695 nodules (malignant 545, benign 1150)
+- **nodule-level (confirmatory, wider CI)**: 1695 nodules (malignant 545, benign 1150)
 - slices/patient: min 1, median 11, max 97
 
 ## SENSITIVITY cohort (min_annotators >= 3) — high-agreement label-noise robustness

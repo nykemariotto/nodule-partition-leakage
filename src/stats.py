@@ -1,41 +1,51 @@
 """
-STAGE 7 — the analytical foundation (SPEC §2.2, §5-B4, §6.7; DECISIONS D5, D6, D21, D24).
+The statistical foundation: every inferential quantity the study reports is implemented here.
 
-This module is the SINGLE versioned implementation of every inferential quantity the study
-reports. Until 2026-07-20 it was a `NotImplementedError` stub while Wilcoxon and Nadeau-Bengio
-lived in `scripts/`, and the pre-registered bootstrap (SPEC B4) existed nowhere — the exact
-config-says / code-does divergence this guards against (DECISIONS D27). `scripts/` now
-imports from here; nothing reimplements these.
+This module is the SINGLE implementation of those quantities; `scripts/` imports from here and
+nothing reimplements them, so the configuration cannot describe one method while a script
+computes another.
 
 WHAT IS HERE, and the reasoning that constrains each:
 
-  fold_summary()      D24: every metric is computed WITHIN each fold and then averaged across
-                      folds. Predictions are never pooled across folds — pooled predictions have
-                      no valid interval and mix distributions.
+  mean_ci()           Every metric is computed WITHIN each fold and then averaged across folds.
+                      Predictions are never pooled across folds — pooled predictions have no
+                      valid interval and mix distributions. One exception: at the NODULE level
+                      the random arm's folds are drawn over slices, so a nodule's slices sit in
+                      several test folds and a within-fold nodule score counts that nodule
+                      several times on partial slices. There, `scripts/nodule_oof.py` collects
+                      each repeat's out-of-fold predictions first, scores every nodule once per
+                      repeat, and takes its interval from `run_aware_interval()`, which adds the
+                      run-to-run variance across repeats to the patient-bootstrap variance from
+                      `cluster_bootstrap_draws()`.
 
-  nadeau_bengio_se()  D6. k-fold estimates are NOT independent: training sets overlap, so the
+  nadeau_bengio_ttest() The paired test across folds, built on the same corrected SE and t
+                      quantile as the interval, so it is that interval's exact dual. It is the
+                      test the paper reports; the signed-rank test treats the folds as
+                      independent pairs and is kept only as a description of sign agreement.
+                      Arms are paired by repeat and fold INDEX: their test sets differ by
+                      construction, so a p-value is reported to one significant figure.
+
+  nadeau_bengio_se()  k-fold estimates are NOT independent: training sets overlap, so the
                       naive s/sqrt(k) understates variance. Corrected SE = s*sqrt(1/k + rho),
-                      rho = n_test/n_train. Measured here rho ~ 0.284 -> intervals widen x1.556.
-                      At n=5 that is precisely the difference between "excludes zero" and not.
+                      rho = n_test/n_train (about 0.29 in this design). With few folds that is
+                      precisely the difference between "excludes zero" and not.
 
-  wilcoxon_paired()   D5. Also returns `min_attainable_p`, because at small n the test has a
-                      FLOOR: the two-sided exact minimum is 2/2^n (n=5 -> 0.0625). Reporting
-                      "p=0.0625" without that context invites reading it as a near-miss when it
-                      is the smallest value the test can produce.
+  wilcoxon_paired()   Descriptive only (see nadeau_bengio_ttest). It stays because its floor is
+                      informative: it also returns `min_attainable_p`, because at small n the
+                      test has a FLOOR: the two-sided exact minimum is 2/2^n (n=5 -> 0.0625).
+                      Reporting "p=0.0625" without that context invites reading it as a
+                      near-miss when it is the smallest value the test can produce.
 
-  bootstrap_ci()      SPEC B4. Percentile bootstrap over the INDEPENDENT unit. When slices are
-                      the rows, that unit is the PATIENT, not the row — pass `unit_ids` for a
-                      cluster bootstrap. Resampling correlated rows independently yields
-                      intervals that are far too narrow.
+  cluster_bootstrap_draws()  Percentile bootstrap over the INDEPENDENT unit. When slices are the
+                      rows, that unit is the PATIENT, not the row: resampling correlated rows
+                      independently yields intervals that are far too narrow.
 
-    python -m src.stats --level nodule       # -> outputs/results/stats_<level>.json
+  mcnemar_from_counts()  McNemar's test from the two discordant counts, reported only as a
+                      description (scripts/nodule_oof.py).
 """
 from __future__ import annotations
 
-import argparse
-import json
-import os
-from typing import Callable, Sequence
+from typing import Sequence
 
 import numpy as np
 from scipy.stats import t as tdist, wilcoxon as _wilcoxon
@@ -48,7 +58,7 @@ def naive_se(values: Sequence[float]) -> float:
 
 
 def nadeau_bengio_se(values: Sequence[float], rho: float) -> float:
-    """Corrected SE of the mean of k dependent cross-validation estimates (D6).
+    """Corrected SE of the mean of k dependent cross-validation estimates.
 
     rho = n_test / n_train; rho=0 degenerates to the naive s/sqrt(k).
     """
@@ -60,7 +70,7 @@ def nadeau_bengio_se(values: Sequence[float], rho: float) -> float:
 
 
 def rho_from_splits(n_test: Sequence[int], n_train: Sequence[int]) -> float:
-    """Nadeau-Bengio rho = mean(n_test / n_train) across folds (D6)."""
+    """Nadeau-Bengio rho = mean(n_test / n_train) across folds."""
     return float(np.mean(np.asarray(n_test, float) / np.asarray(n_train, float)))
 
 
@@ -68,7 +78,7 @@ def mean_ci(values: Sequence[float], rho: float = 0.0, alpha: float = 0.05) -> d
     """Mean with BOTH the naive and the Nadeau-Bengio interval, and which excludes zero.
 
     Both are returned deliberately: the naive one is what a reader would compute by default, the
-    corrected one is what this study pre-registered. Reporting only the narrower would overstate.
+    corrected one is what this study prespecified. Reporting only the narrower would overstate.
     """
     v = np.asarray(values, dtype=float)
     k = len(v)
@@ -85,13 +95,31 @@ def mean_ci(values: Sequence[float], rho: float = 0.0, alpha: float = 0.05) -> d
                 folds_positive=int((v > 0).sum()), per_fold=[float(x) for x in v])
 
 
-def fold_summary(per_fold_values: dict, rho: float, alpha: float = 0.05) -> dict:
-    """D24: {metric_name: [one value per fold]} -> {metric_name: mean + intervals}.
+def nadeau_bengio_ttest(values: Sequence[float], rho: float) -> dict:
+    """Corrected resampled t-test for the mean of k dependent cross-validation differences.
 
-    Takes values ALREADY computed within each fold, so it cannot pool predictions even by
-    mistake — which is the point.
+    Same standard error as the Nadeau-Bengio interval, s*sqrt(1/k + rho), and the same t reference
+    with k-1 degrees of freedom, so p < alpha exactly when `mean_ci(values, rho)["ci_nb"]` excludes
+    zero. A test whose verdict could disagree with the interval printed beside it would be a second,
+    weaker claim about the same numbers.
     """
-    return {name: mean_ci(vals, rho=rho, alpha=alpha) for name, vals in per_fold_values.items()}
+    v = np.asarray(values, dtype=float)
+    k = len(v)
+    if k < 2:
+        return dict(k=k, mean=float(v.mean()) if k else None, se=None, rho=rho, t=None, df=None,
+                    p=None)
+    m = float(v.mean())
+    se = nadeau_bengio_se(v, rho)
+    # Only an exactly zero spread is special: the interval is then the point itself, so p is 0 or 1
+    # by whether the mean is zero, exactly as `mean_ci` decides. A tolerance here would let the test
+    # and the interval disagree on rounding noise. t is None rather than infinite, so the result
+    # can be written to JSON.
+    if se == 0.0:
+        t, p = (None, 0.0) if m != 0.0 else (0.0, 1.0)
+    else:
+        t = float(m / se)
+        p = float(2.0 * tdist.sf(abs(t), k - 1))
+    return dict(k=k, mean=m, se=se, rho=rho, t=t, df=k - 1, p=p)
 
 
 # ----------------------------------------------------------------------------- paired test
@@ -101,7 +129,7 @@ def wilcoxon_min_p(n: int) -> float:
 
 
 def wilcoxon_paired(a: Sequence[float], b: Sequence[float] | None = None) -> dict:
-    """D5 paired A-vs-B test. `a` may be the differences directly (b=None).
+    """Paired A-vs-B signed-rank test. `a` may be the differences directly (b=None).
 
     `at_floor` says the p-value IS the minimum attainable — the data are as extreme as this test
     can register, and a larger n (not a larger effect) is what would move it.
@@ -139,173 +167,94 @@ def mcnemar_from_counts(b: int, c: int) -> dict:
                    method="exact binomial")
     else:
         from scipy.stats import chi2
-        stat = (abs(b - c) - 1) ** 2 / n
+        stat = max(abs(b - c) - 1, 0) ** 2 / n
         out.update(statistic=float(stat), p=float(chi2.sf(stat, 1)),
                    method="chi-square (continuity-corrected)")
     return out
 
 
-def mcnemar(y_true, pred_a, pred_b, thr=0.5) -> dict:
-    """McNemar's paired test for two classifiers on the SAME test set (D5 within-arm; B5).
+# ----------------------------------------------------------------------------- bootstrap
+def cluster_bootstrap_draws(unit_of_row, n_boot: int, seed: int):
+    """Row-index arrays for a percentile bootstrap over clusters, one array per draw.
 
-    ONLY valid when both models saw the identical test samples (arch-vs-arch or ensemble-vs-single
-    within ONE arm). It is INVALID across the patient/random arms — their test sets differ (SPEC).
-    Returns b, c (the discordant counts) so the reader sees the evidence, not just a p-value.
+    Units (patients) are drawn with replacement and all their rows travel together; a unit drawn
+    twice contributes its rows twice. The caller applies EACH draw to every quantity it compares --
+    every arm, architecture and repeat -- so the comparison is paired: computing the contrast
+    inside one draw is what lets the shared patient-sampling variability cancel.
     """
-    y = np.asarray(y_true).astype(int)
-    a = (np.asarray(pred_a) >= thr).astype(int)
-    b_ = (np.asarray(pred_b) >= thr).astype(int)
-    a_correct = a == y
-    b_correct = b_ == y
-    b = int(np.sum(a_correct & ~b_correct))     # A right, B wrong
-    c = int(np.sum(~a_correct & b_correct))     # A wrong, B right
-    return mcnemar_from_counts(b, c)
-
-
-# ----------------------------------------------------------------------------- bootstrap (B4)
-def bootstrap_ci(y_true, y_prob, metric: Callable, n_boot: int = 2000, alpha: float = 0.05,
-                 seed: int = 42, unit_ids=None) -> dict:
-    """Percentile bootstrap CI for one metric on one run's predictions (SPEC B4).
-
-    unit_ids: cluster labels (e.g. patient_id). When given, CLUSTERS are resampled with
-    replacement and all their rows travel together — mandatory when rows within a unit are
-    correlated (the slices of a patient), otherwise the interval is spuriously narrow.
-    Draws whose resample contains a single class are skipped and counted, never silently.
-    """
-    y = np.asarray(y_true)
-    p = np.asarray(y_prob, dtype=float)
-    rng = np.random.RandomState(seed)
-    point = float(metric(y, p))
-    vals, skipped = [], 0
-
-    if unit_ids is not None:
-        u = np.asarray(unit_ids)
-        keys = list(np.unique(u))
-        groups = {g: np.flatnonzero(u == g) for g in keys}
-
+    _, inv = np.unique(np.asarray(unit_of_row), return_inverse=True)
+    n_units = int(inv.max()) + 1
+    rows = np.arange(len(inv))
+    rng = np.random.default_rng(seed)
     for _ in range(n_boot):
-        if unit_ids is None:
-            take = rng.randint(0, len(y), len(y))
-        else:
-            picks = rng.randint(0, len(keys), len(keys))
-            take = np.concatenate([groups[keys[i]] for i in picks])
-        if len(np.unique(y[take])) < 2:
-            skipped += 1
-            continue
-        vals.append(float(metric(y[take], p[take])))
-
-    if not vals:
-        return dict(point=point, ci=None, n_boot=n_boot, n_used=0, skipped=skipped,
-                    clustered=unit_ids is not None)
-    v = np.asarray(vals)
-    return dict(point=point,
-                ci=[float(np.percentile(v, 100 * alpha / 2)),
-                    float(np.percentile(v, 100 * (1 - alpha / 2)))],
-                se=float(v.std(ddof=1)), n_boot=n_boot, n_used=len(v), skipped=skipped,
-                clustered=unit_ids is not None)
+        mult = np.bincount(rng.integers(0, n_units, n_units), minlength=n_units)
+        yield np.repeat(rows, mult[inv])
 
 
-# ----------------------------------------------------------------------------- CLI
-def _fold_nodule(cfg, arch, arm, sample_unit, rep, fold, pidx):
-    """One (rep,fold) test set at nodule level, from archived probs — NEVER pooled across folds.
+def run_aware_interval(per_repeat: Sequence[float], boot_stats: Sequence[float],
+                       alpha: float = 0.05, components=None) -> dict:
+    """Interval for a mean over R repeats that carries BOTH sources of variation.
 
-    Pooling across folds was a bug (code review 2026-07-21): the random arm's test folds overlap,
-    so pooling then grouping by nodule averages probabilities from DIFFERENT fold-models for the
-    same nodule and double-counts patients, distorting the bootstrap. Within ONE fold every
-    prediction comes from that fold's single model and each nodule appears once — clean.
+    `per_repeat` holds the statistic of each repeat; the repeats differ only in partition and
+    training, all evaluated on the same patients. `boot_stats` holds the cluster-bootstrap
+    distribution of the mean over repeats: the evaluated patients are resampled and the trained
+    models held fixed. SE^2 = s_rep^2 / R + var(boot_stats). The two terms are not perfectly
+    separate -- a model-by-patient interaction enters both -- which makes the sum conservative. The
+    verdict uses t with R - 1 degrees of freedom, the conservative convention, because the repeat
+    term is estimated from only R values. A Welch-Satterthwaite interval is returned beside it as a
+    sensitivity: when the bootstrap term dominates, the df convention, not the data, can decide a
+    borderline verdict, and a reader should be able to see whether it does. Neither term carries
+    the variance of drawing a different training cohort. Either term alone answers a narrower
+    question; the bootstrap alone cannot tell an effect of the protocol from run-to-run variation,
+    which is why it does not carry the verdict.
+
+    `components`: for a contrast between two INDEPENDENT sets of runs (two arms, whose repeats share
+    nothing but a seed index), pass the two sets of per-repeat values. The repeat term is then
+    (s_X^2 + s_Y^2) / R, which does not depend on how the repeats are paired and equals the average
+    of the paired term over every pairing. Without it, the spread of `per_repeat` is used, which is
+    right when the pairing is real (two architectures trained on the same partitions).
     """
-    import pandas as pd
-    O = os.path.join(cfg["project"]["root"], cfg["paths"]["outputs"])
-    tag = f"lidc_binary_{sample_unit}_{arm}_rep{rep}_fold{fold}"
-    npz = os.path.join(O, "probs", f"{tag}_{arch}_none_seed42.npz")
-    csv = os.path.join(O, "splits", f"{tag}_test.csv")
-    if not (os.path.exists(npz) and os.path.exists(csv)):
-        return None
-    d = np.load(npz)
-    s = pd.read_csv(csv); s["z_position"] = s["z_position"].round(2)
-    m = s.merge(pidx, on=["nodule_id", "z_position"], how="inner").reset_index(drop=True)
-    if len(m) != len(d["y_prob"]):
-        raise RuntimeError(f"alignment {tag} {arch}: {len(m)} vs {len(d['y_prob'])}")
-    m["prob"] = d["y_prob"].astype(float)
-    g = m.groupby("nodule_id").agg(label=("label", "first"), patient_id=("patient_id", "first"),
-                                   prob=("prob", "mean")).reset_index()
-    return g
+    r = np.asarray(per_repeat, dtype=float)
+    b = np.asarray(boot_stats, dtype=float)
+    k = len(r)
+    if k < 2:
+        return dict(k=k, mean=float(r.mean()) if k else None, se=None, df=None, var_repeats=None,
+                    var_boot=None, ci=None, excludes_zero=None, df_satterthwaite=None,
+                    ci_satterthwaite=None, excludes_zero_satterthwaite=None)
+    m = float(r.mean())
+    var_boot = float(b.var(ddof=1))
+    if components is None:
+        parts = [float(r.var(ddof=1))]
+    else:
+        cs = [np.asarray(c, dtype=float) for c in components]
+        if len(cs) < 2:
+            raise ValueError("components: one set of per-repeat values per arm, at least two")
+        if any(len(c) != k for c in cs):
+            raise ValueError("every component needs one value per repeat")
+        parts = [float(c.var(ddof=1)) for c in cs]
+    var_rep = float(sum(parts))
+    a = var_rep / k
+    se = float(np.sqrt(a + var_boot))
+    h = float(tdist.ppf(1 - alpha / 2, k - 1)) * se
+    # bootstrap term treated as known (thousands of draws): its df contribution is negligible
+    den = sum((v / k) ** 2 / (k - 1) for v in parts)
+    df_s = float(se ** 4 / den) if den > 0 else float("inf")
+    hs = float(tdist.ppf(1 - alpha / 2, df_s)) * se          # scipy accepts df = inf (normal)
+    return dict(k=k, mean=m, se=se, df=k - 1, var_repeats=var_rep, var_boot=var_boot,
+                ci=[m - h, m + h], excludes_zero=bool((m - h) > 0 or (m + h) < 0),
+                df_satterthwaite=df_s if np.isfinite(df_s) else None,
+                ci_satterthwaite=[m - hs, m + hs],
+                excludes_zero_satterthwaite=bool((m - hs) > 0 or (m + hs) < 0))
 
 
-def main():
-    ap = argparse.ArgumentParser(description="STAGE 7 — per-metric bootstrap CIs (B4), fold-aware.")
-    ap.add_argument("--config", default="config.yaml")
-    ap.add_argument("--archs", default="densenet121,efficientnet_b0")
-    ap.add_argument("--arms", default="patient,random")
-    ap.add_argument("--sample-unit", default="nodule", choices=["slice", "nodule"])
-    ap.add_argument("--reps", default="0")
-    ap.add_argument("--folds", default="0,1,2,3,4")
-    ap.add_argument("--n-boot", type=int, default=0, help="0 = config evaluate.bootstrap_n")
-    args = ap.parse_args()
-
-    from sklearn.metrics import roc_auc_score, log_loss, brier_score_loss
-    from src.metadata import load_config
-    from src.datasets import load_processed_index
-
-    cfg = load_config(args.config)
-    n_boot = args.n_boot or cfg["evaluate"]["bootstrap_n"]
-    alpha = 1.0 - float(cfg["evaluate"]["ci"])
-    pidx = load_processed_index(cfg, "none")
-    reps = [int(x) for x in args.reps.split(",")]
-    folds = [int(x) for x in args.folds.split(",")]
-    metrics = (("auc", roc_auc_score),
-               ("logloss", lambda a, b: log_loss(a, b, labels=[0, 1])),
-               ("brier", brier_score_loss))
-    out = {}
-
-    for arch in args.archs.split(","):
-        for arm in args.arms.split(","):
-            # per-fold: point estimate + within-fold cluster bootstrap CI (each fold is clean)
-            per_fold = {name: [] for name, _ in metrics}
-            boot_lo = {name: [] for name, _ in metrics}
-            boot_hi = {name: [] for name, _ in metrics}
-            nfolds = 0
-            for rep in reps:
-                for fold in folds:
-                    g = _fold_nodule(cfg, arch, arm, args.sample_unit, rep, fold, pidx)
-                    if g is None:
-                        continue
-                    y = g["label"].to_numpy(int)
-                    p = np.clip(g["prob"].to_numpy(float), 1e-6, 1 - 1e-6)
-                    units = g["patient_id"].to_numpy()   # cluster bootstrap on the patient
-                    if len(np.unique(y)) < 2:
-                        continue
-                    nfolds += 1
-                    for name, fn in metrics:
-                        bc = bootstrap_ci(y, p, fn, n_boot=n_boot, alpha=alpha, unit_ids=units)
-                        per_fold[name].append(bc["point"])
-                        if bc["ci"]:
-                            boot_lo[name].append(bc["ci"][0]); boot_hi[name].append(bc["ci"][1])
-            if nfolds == 0:
-                continue
-            res = {}
-            for name, _ in metrics:
-                vals = per_fold[name]
-                summary = mean_ci(vals, rho=0.0)          # fold spread (NB rho set by caller elsewhere)
-                res[name] = dict(point=summary.get("mean"), n_folds=nfolds,
-                                 ci_fold_spread=summary.get("ci_naive"),
-                                 mean_within_fold_bootstrap_ci=[float(np.mean(boot_lo[name])),
-                                                                float(np.mean(boot_hi[name]))]
-                                 if boot_lo[name] else None,
-                                 per_fold=[float(x) for x in vals])
-            out[f"{arch}|{arm}|{args.sample_unit}"] = res
-            print(f"{arch:16} {arm:8} {args.sample_unit:7} n_folds={nfolds}  " + "  ".join(
-                f"{name} {res[name]['point']:.4f}" for name, _ in metrics))
-
-    D = os.path.join(cfg["project"]["root"], cfg["paths"]["outputs"], "results")
-    os.makedirs(D, exist_ok=True)
-    path = os.path.join(D, f"stats_{args.sample_unit}.json")
-    with open(path, "w") as fh:
-        json.dump({"_note": "per-fold cluster bootstrap on patient_id (B4), NEVER pooled across "
-                            "folds; point = fold mean; within-fold bootstrap CI averaged across "
-                            "folds. n_boot=%d." % n_boot, "results": out}, fh, indent=1)
-    print(f"wrote {path}  (fold-aware; cluster bootstrap on patient_id, n_boot={n_boot})")
-
-
-if __name__ == "__main__":
-    main()
+def auc_rank(y_true, y_score) -> float:
+    """ROC AUC as the Mann-Whitney statistic with average ranks (ties count one half), which is
+    what `sklearn.metrics.roc_auc_score` computes. Kept here because a bootstrap calls it tens of
+    thousands of times; callers verify it against sklearn on the point estimate."""
+    from scipy.stats import rankdata
+    y = np.asarray(y_true).astype(bool)
+    n_pos = int(y.sum()); n_neg = len(y) - n_pos
+    if n_pos == 0 or n_neg == 0:
+        return float("nan")
+    r = rankdata(np.asarray(y_score, dtype=float))
+    return float((r[y].sum() - n_pos * (n_pos + 1) / 2.0) / (n_pos * n_neg))

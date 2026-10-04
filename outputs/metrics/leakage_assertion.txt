@@ -1,11 +1,117 @@
-arm      fold  pat tr/te  pat tr/val  nod tr/te  row tr/te    interpretation
-patient  0     0          0           0          0            0.0% of test rows belong to a TRAIN patient
-patient  1     0          0           0          0            0.0% of test rows belong to a TRAIN patient
-patient  2     0          0           0          0            0.0% of test rows belong to a TRAIN patient
-patient  3     0          0           0          0            0.0% of test rows belong to a TRAIN patient
-patient  4     0          0           0          0            0.0% of test rows belong to a TRAIN patient
-random   0     199        153         348        0            98.9% of test rows belong to a TRAIN patient
-random   1     194        157         335        0            99.7% of test rows belong to a TRAIN patient
-random   2     204        152         339        0            99.5% of test rows belong to a TRAIN patient
-random   3     201        147         334        0            99.8% of test rows belong to a TRAIN patient
-random   4     200        152         328        0            99.4% of test rows belong to a TRAIN patient
+dataset         unit    arm       rep fold pat tr/te pat tr/va pat va/te nod tr/te row tr/te  L(pat)  L(nod) rows/pat  verdict
+lidc_binary_ge3 slice   patient     0    0         0         0         0         0         0   0.000   0.000    13.45  ok
+lidc_binary_ge3 slice   patient     0    1         0         0         0         0         0   0.000   0.000    12.92  ok
+lidc_binary_ge3 slice   patient     0    2         0         0         0         0         0   0.000   0.000    13.51  ok
+lidc_binary_ge3 slice   patient     0    3         0         0         0         0         0   0.000   0.000    12.84  ok
+lidc_binary_ge3 slice   patient     0    4         0         0         0         0         0   0.000   0.000    12.45  ok
+lidc_binary_ge3 slice   patient     1    0         0         0         0         0         0   0.000   0.000    12.82  ok
+lidc_binary_ge3 slice   patient     1    1         0         0         0         0         0   0.000   0.000    12.63  ok
+lidc_binary_ge3 slice   patient     1    2         0         0         0         0         0   0.000   0.000    12.89  ok
+lidc_binary_ge3 slice   patient     1    3         0         0         0         0         0   0.000   0.000    12.72  ok
+lidc_binary_ge3 slice   patient     1    4         0         0         0         0         0   0.000   0.000    13.80  ok
+lidc_binary_ge3 slice   patient     2    0         0         0         0         0         0   0.000   0.000    12.89  ok
+lidc_binary_ge3 slice   patient     2    1         0         0         0         0         0   0.000   0.000    13.02  ok
+lidc_binary_ge3 slice   patient     2    2         0         0         0         0         0   0.000   0.000    12.79  ok
+lidc_binary_ge3 slice   patient     2    3         0         0         0         0         0   0.000   0.000    13.17  ok
+lidc_binary_ge3 slice   patient     2    4         0         0         0         0         0   0.000   0.000    13.51  ok
+lidc_binary_ge3 slice   random      0    0       432       342       294       637         0   0.995   0.984     9.19  ok
+lidc_binary_ge3 slice   random      0    1       443       339       297       640         0   0.994   0.989     9.17  ok
+lidc_binary_ge3 slice   random      0    2       443       350       306       631         0   0.998   0.994     9.16  ok
+lidc_binary_ge3 slice   random      0    3       443       342       294       644         0   0.999   0.993     9.14  ok
+lidc_binary_ge3 slice   random      0    4       440       329       291       631         0   0.995   0.987     9.18  ok
+lidc_binary_ge3 slice   random      1    0       450       325       294       641         0   0.994   0.989     9.21  ok
+lidc_binary_ge3 slice   random      1    1       432       352       299       626         0   0.998   0.995     9.16  ok
+lidc_binary_ge3 slice   random      1    2       441       344       298       643         0   0.997   0.987     9.16  ok
+lidc_binary_ge3 slice   random      1    3       437       336       294       623         0   0.997   0.991     9.18  ok
+lidc_binary_ge3 slice   random      1    4       438       344       291       626         0   0.996   0.986     9.18  ok
+lidc_binary_ge3 slice   random      2    0       450       342       301       643         0   0.998   0.995     9.16  ok
+lidc_binary_ge3 slice   random      2    1       431       346       298       630         0   0.996   0.990     9.16  ok
+lidc_binary_ge3 slice   random      2    2       448       343       296       635         0   1.000   0.987     9.12  ok
+lidc_binary_ge3 slice   random      2    3       439       341       296       616         0   0.999   0.987     9.14  ok
+lidc_binary_ge3 slice   random      2    4       435       336       288       622         0   0.994   0.982     9.19  ok
+lidc_binary     nodule  patient     0    0         0         0         0         0         0   0.000   0.000     2.31  ok
+lidc_binary     nodule  patient     0    1         0         0         0         0         0   0.000   0.000     2.29  ok
+lidc_binary     nodule  patient     0    2         0         0         0         0         0   0.000   0.000     2.38  ok
+lidc_binary     nodule  patient     0    3         0         0         0         0         0   0.000   0.000     2.25  ok
+lidc_binary     nodule  patient     0    4         0         0         0         0         0   0.000   0.000     2.27  ok
+lidc_binary     nodule  patient     1    0         0         0         0         0         0   0.000   0.000     2.28  ok
+lidc_binary     nodule  patient     1    1         0         0         0         0         0   0.000   0.000     2.34  ok
+lidc_binary     nodule  patient     1    2         0         0         0         0         0   0.000   0.000     2.33  ok
+lidc_binary     nodule  patient     1    3         0         0         0         0         0   0.000   0.000     2.23  ok
+lidc_binary     nodule  patient     1    4         0         0         0         0         0   0.000   0.000     2.25  ok
+lidc_binary     nodule  patient     2    0         0         0         0         0         0   0.000   0.000     2.29  ok
+lidc_binary     nodule  patient     2    1         0         0         0         0         0   0.000   0.000     2.30  ok
+lidc_binary     nodule  patient     2    2         0         0         0         0         0   0.000   0.000     2.27  ok
+lidc_binary     nodule  patient     2    3         0         0         0         0         0   0.000   0.000     2.28  ok
+lidc_binary     nodule  patient     2    4         0         0         0         0         0   0.000   0.000     2.17  ok
+lidc_binary     nodule  random      0    0       192       111        56         0         0   0.779   0.000     1.85  ok
+lidc_binary     nodule  random      0    1       201       110        52         0         0   0.782   0.000     1.86  ok
+lidc_binary     nodule  random      0    2       183       100        48         0         0   0.699   0.000     1.91  ok
+lidc_binary     nodule  random      0    3       178       110        53         0         0   0.676   0.000     1.94  ok
+lidc_binary     nodule  random      0    4       195       103        46         0         0   0.726   0.000     1.93  ok
+lidc_binary     nodule  random      1    0       181       102        45         0         0   0.711   0.000     1.90  ok
+lidc_binary     nodule  random      1    1       182       104        53         0         0   0.723   0.000     1.92  ok
+lidc_binary     nodule  random      1    2       200       111        60         0         0   0.740   0.000     1.87  ok
+lidc_binary     nodule  random      1    3       178       109        49         0         0   0.723   0.000     1.90  ok
+lidc_binary     nodule  random      1    4       173       103        53         0         0   0.658   0.000     1.94  ok
+lidc_binary     nodule  random      2    0       186        98        57         0         0   0.720   0.000     1.91  ok
+lidc_binary     nodule  random      2    1       187       103        55         0         0   0.720   0.000     1.90  ok
+lidc_binary     nodule  random      2    2       176       114        55         0         0   0.702   0.000     1.92  ok
+lidc_binary     nodule  random      2    3       194       107        59         0         0   0.737   0.000     1.89  ok
+lidc_binary     nodule  random      2    4       168       104        51         0         0   0.676   0.000     1.91  ok
+lidc_binary     slice   nodule      0    0       192       111        56         0         0   0.745   0.000    12.00  ok
+lidc_binary     slice   nodule      0    1       201       110        52         0         0   0.754   0.000    11.97  ok
+lidc_binary     slice   nodule      0    2       183       100        48         0         0   0.681   0.000    12.32  ok
+lidc_binary     slice   nodule      0    3       178       110        53         0         0   0.648   0.000    12.70  ok
+lidc_binary     slice   nodule      0    4       195       103        46         0         0   0.698   0.000    12.26  ok
+lidc_binary     slice   nodule      1    0       181       102        45         0         0   0.684   0.000    12.45  ok
+lidc_binary     slice   nodule      1    1       182       104        53         0         0   0.702   0.000    12.36  ok
+lidc_binary     slice   nodule      1    2       200       111        60         0         0   0.691   0.000    12.24  ok
+lidc_binary     slice   nodule      1    3       178       109        49         0         0   0.726   0.000    12.57  ok
+lidc_binary     slice   nodule      1    4       173       103        53         0         0   0.642   0.000    12.43  ok
+lidc_binary     slice   nodule      2    0       186        98        57         0         0   0.714   0.000    12.42  ok
+lidc_binary     slice   nodule      2    1       187       103        55         0         0   0.684   0.000    12.34  ok
+lidc_binary     slice   nodule      2    2       176       114        55         0         0   0.638   0.000    12.43  ok
+lidc_binary     slice   nodule      2    3       194       107        59         0         0   0.723   0.000    12.76  ok
+lidc_binary     slice   nodule      2    4       168       104        51         0         0   0.615   0.000    12.26  ok
+lidc_binary     slice   patient     0    0         0         0         0         0         0   0.000   0.000    14.66  ok
+lidc_binary     slice   patient     0    1         0         0         0         0         0   0.000   0.000    14.35  ok
+lidc_binary     slice   patient     0    2         0         0         0         0         0   0.000   0.000    15.75  ok
+lidc_binary     slice   patient     0    3         0         0         0         0         0   0.000   0.000    15.07  ok
+lidc_binary     slice   patient     0    4         0         0         0         0         0   0.000   0.000    15.30  ok
+lidc_binary     slice   patient     1    0         0         0         0         0         0   0.000   0.000    14.84  ok
+lidc_binary     slice   patient     1    1         0         0         0         0         0   0.000   0.000    15.23  ok
+lidc_binary     slice   patient     1    2         0         0         0         0         0   0.000   0.000    15.25  ok
+lidc_binary     slice   patient     1    3         0         0         0         0         0   0.000   0.000    14.45  ok
+lidc_binary     slice   patient     1    4         0         0         0         0         0   0.000   0.000    15.04  ok
+lidc_binary     slice   patient     2    0         0         0         0         0         0   0.000   0.000    15.21  ok
+lidc_binary     slice   patient     2    1         0         0         0         0         0   0.000   0.000    14.70  ok
+lidc_binary     slice   patient     2    2         0         0         0         0         0   0.000   0.000    14.28  ok
+lidc_binary     slice   patient     2    3         0         0         0         0         0   0.000   0.000    14.99  ok
+lidc_binary     slice   patient     2    4         0         0         0         0         0   0.000   0.000    14.48  ok
+lidc_binary     slice   random      0    0       591       475       411      1058         0   0.994   0.971    10.57  ok
+lidc_binary     slice   random      0    1       612       476       422      1074         0   1.000   0.981    10.47  ok
+lidc_binary     slice   random      0    2       605       487       431      1079         0   0.996   0.973    10.51  ok
+lidc_binary     slice   random      0    3       590       490       428      1046         0   0.985   0.965    10.69  ok
+lidc_binary     slice   random      0    4       589       470       408      1065         0   0.995   0.976    10.51  ok
+lidc_binary     slice   random      1    0       602       461       402      1082         0   0.992   0.969    10.56  ok
+lidc_binary     slice   random      1    1       596       473       412      1060         0   0.998   0.977    10.47  ok
+lidc_binary     slice   random      1    2       587       470       417      1067         0   0.994   0.976    10.57  ok
+lidc_binary     slice   random      1    3       598       475       424      1056         0   0.994   0.970    10.60  ok
+lidc_binary     slice   random      1    4       603       468       415      1061         0   0.996   0.981    10.56  ok
+lidc_binary     slice   random      2    0       611       468       422      1067         0   0.999   0.971    10.49  ok
+lidc_binary     slice   random      2    1       585       477       416      1058         0   0.994   0.972    10.54  ok
+lidc_binary     slice   random      2    2       604       479       421      1073         0   0.995   0.964    10.54  ok
+lidc_binary     slice   random      2    3       589       478       418      1048         0   0.994   0.967    10.54  ok
+lidc_binary     slice   random      2    4       600       469       420      1078         0   0.997   0.983    10.50  ok
+
+averages over the folds on disk
+  lidc_binary_ge3|slice|patient        n=15  L(patient) 0.0000  L(nodule) 0.0000  training rows per patient 13.03
+  lidc_binary_ge3|slice|random         n=15  L(patient) 0.9967  L(nodule) 0.9891  training rows per patient 9.17
+  lidc_binary|nodule|patient           n=15  L(patient) 0.0000  L(nodule) 0.0000  training rows per patient 2.28
+  lidc_binary|nodule|random            n=15  L(patient) 0.7180  L(nodule) 0.0000  training rows per patient 1.90
+  lidc_binary|slice|nodule             n=15  L(patient) 0.6896  L(nodule) 0.0000  training rows per patient 12.37
+  lidc_binary|slice|patient            n=15  L(patient) 0.0000  L(nodule) 0.0000  training rows per patient 14.91
+  lidc_binary|slice|random             n=15  L(patient) 0.9948  L(nodule) 0.9731  training rows per patient 10.54
+
+RESULT: every rule holds in every fold

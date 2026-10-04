@@ -1,16 +1,18 @@
-"""Make the released partition indices portable.
+"""Make the released partition indices portable: the last step after src.metadata and src.splits.
 
-The `path` column of every split CSV carried an ABSOLUTE Windows path into the author's raw DICOM
-tree (`<local-root>\\LIDC-IDRI\\manifest-...`). The manuscript offers these indices to reviewers as
-independently executable, so a column that only resolves on one machine undercuts exactly the claim
-it is meant to support -- and it leaks the local layout into a public repository.
+src/metadata.py records each slice's DICOM file by its ABSOLUTE path on the machine that built the
+tables (`<local-root>\\LIDC-IDRI\\manifest-...`), and src/splits.py copies that column into every split file.
+A column that resolves on one machine only would undercut indices offered as independently
+executable, and would leak the local layout into a public repository.
 
-This rewrites that column to a path RELATIVE to the repository root, with forward slashes, so it
-resolves on any platform once the raw data are placed under the documented root. The DICOM
-provenance (manifest, series directory, instance number) is preserved in full.
+This rewrites that column, in the split files and the master tables, to a path RELATIVE to the
+repository root, with forward slashes, so it resolves on any platform once the raw data are placed
+under the documented root. The DICOM provenance (manifest, series directory, instance number) is
+preserved in full. Run after a rebuild, it makes the regenerated files identical to the committed
+ones.
 
 Safe to run because NOTHING READS THIS COLUMN: `src/datasets.py` loads images through
-`processed_path` from the processed index, and the analysis code joins on nodule_id + z_position.
+`processed_path` from the processed index, and the analysis code reads the split rows in order.
 Verified before writing, and re-verified here: every other column must come out byte-identical and
 the row count must be unchanged, or the file is left alone and the run fails.
 
