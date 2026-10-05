@@ -11,7 +11,7 @@ EXCLUDE = {
     2: "segmentation only",
     5: "review",
     7: "segmentation only",
-    14: "data not from LIDC-IDRI (BIR Lung CT dataset)",
+    14: "trained on another dataset (BIR Lung CT); LIDC-IDRI used only for external validation",
     28: "segmentation only",
     31: "segmentation only",
     47: "detection only",
