@@ -152,6 +152,8 @@ Partition indices, per-sample predictions and per-run training histories are **i
 - `outputs/history/` — per-epoch train/val trajectory plus the configuration hash for each run.
 - `outputs/results/`, `outputs/_analysis/`, `outputs/metrics/`, `outputs/figures/` — the derived
   tables and figures, each produced by the script named above.
+- `outputs/results/run_durations.csv` — wall-clock duration of each run, read from the training logs by
+  `scripts/run_durations.py`; the logs are not versioned, so this table is the released record.
 - `outputs/literature/` and `partition_unit_survey.md` — the literature search behind Related Work.
 
 This exceeds usual practice for a paper repository, and it is deliberate: for a study *about*
