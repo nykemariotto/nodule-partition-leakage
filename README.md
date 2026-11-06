@@ -10,8 +10,8 @@ can appear in both training and test folds. Rather than compare against heteroge
 numbers, this study **tests the question by design**: one cohort, identical labels, preprocessing,
 architecture and training, varying only the partition unit.
 
-> Manuscript under review at *IEEE Access*. Citation details will be added on acceptance;
-> `CITATION.cff` carries the current metadata.
+> Published in *IEEE Access*, doi:[10.1109/ACCESS.2026.3750625](https://doi.org/10.1109/ACCESS.2026.3750625)
+> (Early Access). `CITATION.cff` carries the citation metadata.
 
 ## The design
 
@@ -216,9 +216,9 @@ runs carry a different configuration hash than ours, which is correct, since the
 ## Citing this work
 
 `CITATION.cff` carries the metadata, so GitHub's "Cite this repository" button generates APA and
-BibTeX directly. It points at the paper rather than the code, which is what should be cited. The
-journal reference is deliberately incomplete — volume, pages and DOI are added on acceptance rather
-than shipped as placeholders that would go stale.
+BibTeX directly. It points at the paper rather than the code, which is what should be cited. Page
+numbers are added when the final version of the article is published, rather than shipped as
+placeholders that would go stale.
 
 ```
 https://github.com/nykemariotto/nodule-partition-leakage
