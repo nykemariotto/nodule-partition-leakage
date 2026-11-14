@@ -10,8 +10,9 @@ can appear in both training and test folds. Rather than compare against heteroge
 numbers, this study **tests the question by design**: one cohort, identical labels, preprocessing,
 architecture and training, varying only the partition unit.
 
-> Published in *IEEE Access*, doi:[10.1109/ACCESS.2026.3750625](https://doi.org/10.1109/ACCESS.2026.3750625)
-> (Early Access). `CITATION.cff` carries the citation metadata.
+> Published in *IEEE Access*, vol. 14, pp. 174024–174041, 2026,
+> doi:[10.1109/ACCESS.2026.3750625](https://doi.org/10.1109/ACCESS.2026.3750625).
+> `CITATION.cff` carries the citation metadata.
 
 ## The design
 

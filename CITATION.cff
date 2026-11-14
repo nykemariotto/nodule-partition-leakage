@@ -25,8 +25,7 @@ license: MIT
 repository-code: "https://github.com/nykemariotto/nodule-partition-leakage"
 
 # GitHub renders `preferred-citation` as the thing to cite INSTEAD of the software, and generates
-# APA/BibTeX from it. Pages are added when the final version of the article is published; leaving
-# stale placeholders in a published CITATION.cff is worse than leaving the fields out.
+# APA/BibTeX from it.
 preferred-citation:
   type: article
   title: "Slice-Level Data Partitioning Inflates Pulmonary Nodule Classification Performance: A Controlled Three-Arm Study"
@@ -43,5 +42,7 @@ preferred-citation:
       given-names: Allan Felipe
   journal: "IEEE Access"
   volume: 14
+  start: 174024
+  end: 174041
   year: 2026
   doi: "10.1109/ACCESS.2026.3750625"
